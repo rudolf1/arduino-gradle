@@ -37,7 +37,11 @@ class ArduinoPlugin implements Plugin<Project> {
         }
 
         project.task('upload', dependsOn: 'build') << {
-            def newPort = lastBuild.use1200BpsTouch ? Uploader.perform1200bpsTouch("COM35") : "COM35"
+            if (project.port == null) {
+                throw new GradleException("Please provide a Serial Port")
+            }
+
+            def newPort = lastBuild.use1200BpsTouch ? Uploader.perform1200bpsTouch(project.port) : project.port
             if (!newPort)  {
                 throw new GradleException("No port") 
             }
