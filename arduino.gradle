@@ -9,40 +9,61 @@ buildscript {
     }
 }
 
-def execute(cmd) {
-    def sout = new StringBuffer()
-    def serr = new StringBuffer()
+def getPreferencesCommandLine(buildDir, board) {
+    return ["${arduinoHome}/arduino-builder.exe",
+             "-dump-prefs",
+             "-logger=machine",
+             "-hardware",
+             "${arduinoHome}/hardware",
+             "-hardware",
+             "${arduinoPackagesDir}/packages",
+             "-tools",
+             "${arduinoHome}/tools-builder",
+             "-tools",
+             "${arduinoHome}/hardware/tools/avr",
+             "-tools",
+             "${arduinoPackagesDir}/packages",
+             "-built-in-libraries",
+             "${arduinoHome}/libraries",
+             "-libraries",
+             "${projectLibrariesDir}",
+             "-fqbn=${board}",
+             "-ide-version=10609",
+             "-build-path",
+             "${buildDir}",
+             "-warnings=none",
+             "-quiet"]
+}
 
-    def split = CommandLine.translateCommandLine(cmd)
-    def fixed = split.collect { it.replace('"', "\\\"") }
+def createBuildConfiguration(buildDir, board) {
+    def config = new BuildConfiguration()
 
-    def outProc = Runtime.runtime.exec(fixed as String[], [] as String[], buildDir)
-    def running = true
+    config.libraryNames = libraries
+    config.projectName = projectName
+    config.arduinoHome = arduinoHome
+    config.projectDir = projectDir
+    config.board = board
+    config.originalBuildDir = buildDir
 
-    def bufferPrinter = { buffer ->
-        def lastIndex = 0
-        while (running) {
-            def length = buffer.length()
-            if (length > lastIndex) {
-                print buffer.subSequence(lastIndex, length)
-                lastIndex = length
-            }
-            Thread.sleep(100)
+    config.buildDir.mkdirs()
+
+    new ByteArrayOutputStream().withStream { os ->
+        def data = exec {
+            standardOutput = os
+            commandLine = getPreferencesCommandLine(config.buildDir, config.board)
         }
-    }
-    Thread.start bufferPrinter.curry(sout)
-    Thread.start bufferPrinter.curry(serr)
 
-    outProc.consumeProcessOutput(sout, serr)
-    try {
-        outProc.waitFor()
-    } finally {
-        running = false
+        def friendlyName = config.pathFriendlyBoardName
+        def localCopy = new File(buildDir, "arduino.${friendlyName}.prefs")
+        localCopy.write(os.toString())
+
+        def preferences = new Properties()
+        preferences.load(new StringReader(os.toString().replace("\\", "\\\\")))
+
+        config.preferences = preferences
     }
 
-    if (outProc.exitValue()) {
-        throw new GradleException("Command execution failed (Exit code: ${outProc.exitValue()})\n${sout.toString()}\n${serr.toString()}")
-    }
+    return config
 }
 
 import groovy.util.logging.Slf4j
@@ -54,12 +75,52 @@ class BuildConfiguration {
     String projectName
     String[] libraryNames
     File[] libraryPaths
+    File projectDir
+    File originalBuildDir
     String board
 
     String[] getLibrariesSearchPath() {
         return [
             "$arduinoHome/libraries"
         ];
+    }
+
+    File getBuildDir() {
+        return new File(originalBuildDir, pathFriendlyBoardName)
+    }
+
+    void build() {
+        def arduinoFiles = []
+        gatherSourceFiles(arduinoFiles, new File(buildCorePath))  
+        gatherSourceFiles(arduinoFiles, new File(buildVariantPath))  
+        libraryPaths.each { path -> 
+            gatherSourceFiles(arduinoFiles, path)  
+        }
+
+        def sketchFiles = []
+        gatherSourceFiles(sketchFiles, projectDir)
+
+        def sketchObjectFiles = sketchFiles.collect { buildFile(it) }
+        def arduinoObjectFiles = arduinoFiles.collect { buildFile(it) }
+
+        log.info("Archiving")
+
+        arduinoObjectFiles.each {
+            def String archiveCommand = getArCommand(it, "core.a")
+            log.debug(archiveCommand)
+            execute(archiveCommand)
+        }
+
+        log.info("Linking")
+
+        def String linkCommand = getLinkCommand(sketchObjectFiles, "core.a")
+        log.debug(linkCommand)
+        execute(linkCommand)
+
+        getObjCopyCommands().each {
+            log.debug(it)
+            execute(it)
+        }
     }
 
     String getBuildCorePath() {
@@ -170,7 +231,7 @@ class BuildConfiguration {
                 }
             }
 
-            // println "Unable to find " + library
+            throw new GradleException("Unable to find " + library)
         }
         return libraryPaths;
     }
@@ -217,6 +278,10 @@ class BuildConfiguration {
         return getKey(props, "tools.avrdude.upload.pattern")
     }
 
+    String getPathFriendlyBoardName() {
+        return board.replace(":", "-")
+    }
+
     void gatherSourceFiles(list, dir) {
         dir.eachFileMatch(~/.*${File.separator}.c/) {
             list << it
@@ -242,116 +307,71 @@ class BuildConfiguration {
                dir.absolutePath.contains(File.separator + ".git") ||
                dir.absolutePath.contains(File.separator + ".svn")
     }
-}
 
-def getPreferencesCommandLine(board) {
-    return ["${arduinoHome}/arduino-builder.exe",
-             "-dump-prefs",
-             "-logger=machine",
-             "-hardware",
-             "${arduinoHome}/hardware",
-             "-hardware",
-             "${arduinoPackagesDir}/packages",
-             "-tools",
-             "${arduinoHome}/tools-builder",
-             "-tools",
-             "${arduinoHome}/hardware/tools/avr",
-             "-tools",
-             "${arduinoPackagesDir}/packages",
-             "-built-in-libraries",
-             "${arduinoHome}/libraries",
-             "-libraries",
-             "${projectLibrariesDir}",
-             "-fqbn=${board}",
-             "-ide-version=10609",
-             "-build-path",
-             "${buildDir}",
-             "-warnings=none",
-             "-quiet"]
-}
+    private File buildFile(file) {
+        def objectFile = new File(buildDir, file.name + ".o")
 
-task prepareBuild {
-    doLast {
-        buildDir.mkdirs()
+        if (file.lastModified() < objectFile.lastModified()) {
+            return objectFile
+        }
+
+        log.info("Compiling ${file.name}")
+
+        def boolean isCpp = file.getPath() =~ /.*${File.separator}.cpp/ || file.getPath() =~ /.*${File.separator}.ino/
+        def String compileCommand = isCpp ? getCppCommand(file, objectFile) : getCCommand(file, objectFile)
+
+        log.debug(compileCommand)
+        execute(compileCommand)
+
+        return objectFile
     }
-}
 
-ext.config = new BuildConfiguration()
+    private def execute(cmd) {
+        def sout = new StringBuffer()
+        def serr = new StringBuffer()
 
-task configure(dependsOn:[prepareBuild]) {
-    doLast {
-        config.libraryNames = libraries
-        config.projectName = projectName
-        config.arduinoHome = arduinoHome
-        config.board = defaultBoard
+        def split = CommandLine.translateCommandLine(cmd)
+        def fixed = split.collect { it.replace('"', "\\\"") }
 
-        new ByteArrayOutputStream().withStream { os ->
-            def data = exec {
-                standardOutput = os
-                commandLine = getPreferencesCommandLine(config.board)
+        def outProc = Runtime.runtime.exec(fixed as String[], [] as String[], buildDir)
+        def running = true
+
+        def bufferPrinter = { buffer ->
+            def lastIndex = 0
+            while (running) {
+                def length = buffer.length()
+                if (length > lastIndex) {
+                    print buffer.subSequence(lastIndex, length)
+                    lastIndex = length
+                }
+                Thread.sleep(100)
             }
+        }
+        Thread.start bufferPrinter.curry(sout)
+        Thread.start bufferPrinter.curry(serr)
 
-            def friendlyName = config.board.replace(":", "-")
-            def localCopy = new File(buildDir, "arduino.${friendlyName}.prefs")
-            localCopy.write(os.toString())
+        outProc.consumeProcessOutput(sout, serr)
+        try {
+            outProc.waitFor()
+        } finally {
+            running = false
+        }
 
-            def preferences = new Properties()
-            preferences.load(new StringReader(os.toString().replace("\\", "\\\\")))
-
-            config.preferences = preferences
+        if (outProc.exitValue()) {
+            throw new GradleException("Command execution failed (Exit code: ${outProc.exitValue()})\n${sout.toString()}\n${serr.toString()}")
         }
     }
 }
 
-def build_file(file) {
-    def objectFile = new File(buildDir, file.name + ".o")
-
-    if (file.lastModified() < objectFile.lastModified()) {
-        return objectFile
-    }
-
-    logger.info("Compiling ${file.name}")
-
-    def boolean isCpp = file.getPath() =~ /.*${File.separator}.cpp/ || file.getPath() =~ /.*${File.separator}.ino/
-    def String compileCommand = isCpp ? config.getCppCommand(file, objectFile) : config.getCCommand(file, objectFile)
-
-    logger.debug(compileCommand)
-    execute(compileCommand)
-
-    return objectFile
+task build(dependsOn: []) << {
+    def builder = createBuildConfiguration(buildDir, defaultBoard)
+    builder.build()
 }
 
-task build(dependsOn: [configure]) << {
-    def arduinoFiles = []
-    config.gatherSourceFiles(arduinoFiles, new File(config.buildCorePath))  
-    config.gatherSourceFiles(arduinoFiles, new File(config.buildVariantPath))  
-    config.libraryPaths.each { path -> 
-        config.gatherSourceFiles(arduinoFiles, path)  
-    }
-
-    def sketchFiles = []
-    config.gatherSourceFiles(sketchFiles, projectDir)
-
-    def sketchObjectFiles = sketchFiles.collect { build_file(it) }
-    def arduinoObjectFiles = arduinoFiles.collect { build_file(it) }
-
-    logger.info("Archiving")
-
-    arduinoObjectFiles.each {
-        def String archiveCommand = config.getArCommand(it, "core.a")
-        logger.debug(archiveCommand)
-        execute(archiveCommand)
-    }
-
-    logger.info("Linking")
-
-    def String linkCommand = config.getLinkCommand(sketchObjectFiles, "core.a")
-    logger.debug(linkCommand)
-    execute(linkCommand)
-
-    config.getObjCopyCommands().each {
-        logger.debug(it)
-        execute(it)
+task buildAll << {
+    boards.each {
+        def builder = createBuildConfiguration(buildDir, it)
+        builder.build()
     }
 }
 
