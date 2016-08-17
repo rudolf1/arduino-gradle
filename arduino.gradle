@@ -1,7 +1,3 @@
-ext.arduinoCoresDir = "$arduinoDir/hardware/arduino/avr/cores/"
-ext.arduinoVariantsDir = "$arduinoDir/hardware/arduino/avr/variants/"
-ext.librariesDir = "$arduinoDir/hardware/arduino/avr/libraries/"
-
 buildscript {
     repositories {
         mavenCentral()
@@ -13,42 +9,19 @@ buildscript {
     }
 }
 
-def extract_archive_index() {
-    def result = [:]
-
-    def index = new File(buildDir, "archiveindex.dat")
-
-    if (index.exists()) {
-        def reader = index.newReader()
-        String line = null
-        while ((line = reader.readLine()) != null) {
-            def elems = line.split("=", 2)
-            result[elems[0]] = Long.parseLong(elems[1])
-        }
-    }
-
-    return result
-}
-
-def save_archive_index(index) {
-    def index_file = new File(buildDir, "archiveindex.dat").newPrintWriter()
-    index.each {
-        index_file.println("${it.key}=${it.value}")
-    }
-    index_file.flush()
-    index_file.close()
-}
-
-def runCmd(String cmd, File baseDir) {
+def execute(cmd) {
     def sout = new StringBuffer()
     def serr = new StringBuffer()
 
-    def outProc = Runtime.runtime.exec(cmd, [] as String[], baseDir)
+    def split = CommandLine.translateCommandLine(cmd)
+    def fixed = split.collect { it.replace('"', "\\\"") }
+
+    def outProc = Runtime.runtime.exec(fixed as String[], [] as String[], buildDir)
     def running = true
 
-    def bufferPrinter = {buffer ->
+    def bufferPrinter = { buffer ->
         def lastIndex = 0
-        while(running) {
+        while (running) {
             def length = buffer.length()
             if (length > lastIndex) {
                 print buffer.subSequence(lastIndex, length)
@@ -72,66 +45,153 @@ def runCmd(String cmd, File baseDir) {
     }
 }
 
-def exec_cmd(cmd) {
-    def command = ""
-    cmd.each {
-        command = command + it + " "
+class BuildConfiguration {
+    Properties preferences
+    String arduinoHome
+    String projectName
+    String[] libraryNames
+    File[] libraryPaths
+    String board
+
+    String[] getLibrariesSearchPath() {
+        return [
+            "$arduinoHome/libraries"
+        ];
     }
 
-    runCmd(command, buildDir)
-}
-
-def archive_object_file(object_file) {
-    def cmd = ["$arduinoDir/hardware/tools/avr/bin/avr-ar",
-        "rcs",
-        "$buildDir/core.a",
-        object_file.absolutePath]
-
-    exec_cmd(cmd)
-}
-
-def should_skip_directory(dir) {
-    return dir.absolutePath.contains(File.separator + "examples") ||
-           dir.absolutePath.contains(File.separator + ".git") ||
-           dir.absolutePath.contains(File.separator + ".svn")
-}
-
-def enum_source_files(list, dir) {
-    dir.eachFileMatch(~/.*${File.separator}.c/) {
-        list << it
+    String getBuildCorePath() {
+        return this.preferences."build.core.path"
     }
 
-    dir.eachFileMatch(~/.*${File.separator}.cpp/) {
-        list << it
+    String getBuildVariantPath() {
+        return this.preferences."build.variant.path"
     }
 
-    dir.eachFileMatch(~/.*${File.separator}.ino/) {
-        list << it
+    private String getKey(Properties props, String key) {
+        if (props[key] == null) {
+            return "{$key}"
+        }
+        return this.replace(props, props[key])
     }
 
-    dir.eachDirRecurse() {
-        if (!should_skip_directory(it)) {
-            enum_source_files(list, it)
+    private String replace(Properties props, String value) {
+        return value.replaceAll(/\{([\w\.-]+)\}/) { all, key ->
+            return this.getKey(props, key)
         }
     }
+
+    String getLinkCommand(objectFiles, archiveFile) {
+        Properties props = new Properties()
+        props["object_files"] = objectFiles.join(" ")
+        props["archive_file"] = archiveFile
+        props["build.project_name"] = projectName
+        props.putAll(this.preferences)
+        return getKey(props, "recipe.c.combine.pattern")
+    }
+
+    String getCppCommand(source, object) {
+        Properties props = new Properties()
+        props["source_file"] = source.toString()
+        props["object_file"] = object.toString()
+        props["includes"] = getIncludes().collect { "-I" + it } .join(" ")
+        props.putAll(this.preferences)
+        return getKey(props, "recipe.cpp.o.pattern").replace(" -c", " -x c++ -c")
+    }
+
+    String getCCommand(source, object) {
+        Properties props = new Properties()
+        props["source_file"] = source.toString()
+        props["object_file"] = object.toString()
+        props["includes"] = getIncludes().collect { "-I" + it } .join(" ")
+        props.putAll(this.preferences)
+        return getKey(props, "recipe.c.o.pattern")
+    }
+
+    String getArCommand(object, archive) {
+        Properties props = new Properties()
+        props["object_file"] = object.toString()
+        props["archive_file"] = archive.toString()
+        props.putAll(this.preferences)
+        return getKey(props, "recipe.ar.pattern")
+    }
+
+    String[] getObjCopyCommands() {
+        Properties props = new Properties()
+        props["build.project_name"] = projectName
+        props.putAll(this.preferences)
+
+        if (getKey(props, "recipe.objcopy.bin.pattern")) {
+            return [
+                getKey(props, "recipe.objcopy.bin.pattern"),
+            ]
+        }
+        return [
+            getKey(props, "recipe.objcopy.eep.pattern"),
+            getKey(props, "recipe.objcopy.hex.pattern")
+        ]
+    }
+
+    String[] getIncludes() {
+        def paths = [
+            buildCorePath,
+            buildVariantPath
+        ]
+
+        libraryPaths.each { library ->
+            paths << library.absolutePath
+            library.eachDirRecurse() {
+                if (!shouldSkipDirectory(it)) {
+                    paths << it.absolutePath
+                }
+            }
+        }
+
+        return paths
+    }
+
+    void gatherSourceFiles(list, dir) {
+        dir.eachFileMatch(~/.*${File.separator}.c/) {
+            list << it
+        }
+
+        dir.eachFileMatch(~/.*${File.separator}.cpp/) {
+            list << it
+        }
+
+        dir.eachFileMatch(~/.*${File.separator}.ino/) {
+            list << it
+        }
+
+        dir.eachDirRecurse() {
+            if (!shouldSkipDirectory(it)) {
+                gatherSourceFiles(list, it)
+            }
+        }
+    }
+
+    private boolean shouldSkipDirectory(dir) {
+        return dir.absolutePath.contains(File.separator + "examples") ||
+               dir.absolutePath.contains(File.separator + ".git") ||
+               dir.absolutePath.contains(File.separator + ".svn")
+    }
 }
 
-def get_properties() {
-    exec_cmd(["${arduinoDir}/arduino-builder",
+def getPreferencesCommandLine(board) {
+    return ["${arduinoHome}/arduino-builder.exe",
              "-dump-prefs",
              "-logger=machine",
              "-hardware",
-             "${arduinoDir}/hardware",
+             "${arduinoHome}/hardware",
              "-hardware",
-             "${extraArduinoDir}/packages",
+             "${arduinoPackagesDir}/packages",
              "-tools",
-             "${arduinoDir}/tools-builder",
+             "${arduinoHome}/tools-builder",
              "-tools",
-             "${arduinoDir}/hardware/tools/avr",
+             "${arduinoHome}/hardware/tools/avr",
              "-tools",
-             "${extraArduinoDir}/packages",
+             "${arduinoPackagesDir}/packages",
              "-built-in-libraries",
-             "${arduinoDir}/libraries",
+             "${arduinoHome}/libraries",
              "-libraries",
              "${projectLibrariesDir}",
              "-fqbn=${board}",
@@ -139,179 +199,122 @@ def get_properties() {
              "-build-path",
              "${buildDir}",
              "-warnings=none",
-             "-prefs=build.warn_data_percentage=75",
-             "-verbose"])
-
+             "-quiet"]
 }
 
-def build_file(file, libraries) {
-    def object_file = new File(buildDir, file.name + ".o")
-
-    if (file.lastModified() < object_file.lastModified())
-        return object_file
-
-    // File.absolutePath doesn't work if the file doesn't exist
-    object_file.createNewFile()
-
-    println "Compiling ${file.name}"
-
-    def boolean cpp = file.getPath() =~ /.*${File.separator}.cpp/
-    cpp = cpp || file.getPath() =~ /.*${File.separator}.ino/
-
-    def noexceptions = cpp ? "-fno-exceptions" : ""
-    def compiler = cpp ? "avr-g++" : "avr-gcc"
-
-
-    def cmd = []
-    cmd << "$arduinoDir/hardware/tools/avr/bin/$compiler"
-    if (cpp) {
-        cmd << "-x c++"
+task prepareBuild {
+    doLast {
+        buildDir.mkdirs()
     }
-    cmd << "-c"
-    cmd << "-g"
-    cmd << "-Os"
-    cmd << "-Wall"
-    cmd << "$noexceptions"
-    cmd << "-ffunction-sections"
-    cmd << "-fdata-sections"
-    cmd << "-mmcu=$cpuName"
-    cmd << "-DF_CPU=$cpuClock"
-    cmd << "-MMD"
-    cmd << "-DUSB_VID=null"
-    cmd << "-DUSB_PID=null"
-    cmd << "-DARDUINO=105"
-    cmd << "-I$arduinoCoresDir/$core"
-    cmd << "-I$arduinoVariantsDir/$variant"
-    libraries.each { library ->
-        cmd << "-I${library.absolutePath}"
-        library.eachDirRecurse() {
-            if (!should_skip_directory(it)) {
-                cmd << "-I${it.absolutePath}"
+}
+
+ext.config = new BuildConfiguration()
+
+task configure(dependsOn:[prepareBuild]) {
+    doLast {
+        new ByteArrayOutputStream().withStream { os ->
+            config.board = defaultBoard
+
+            def data = exec {
+                standardOutput = os
+                commandLine = getPreferencesCommandLine(config.board)
             }
+
+            config.preferences = new Properties()
+
+            // This is pretty annoying.
+            config.preferences.load(new StringReader(os.toString().replace("\\", "\\\\")))
+
+            def libraryPaths = []
+            libraries.each { library -> 
+                logger.info("Searching for $library...")
+                config.getLibrariesSearchPath().each { librariesDir ->
+                    logger.debug("Checking $librariesDir...")
+                    def libraryDirectory = new File(librariesDir, library)
+                    if (libraryDirectory.exists() && libraryDirectory.isDirectory()) {
+                        libraryPaths << libraryDirectory
+                        logger.info("Found $libraryDirectory!")
+                        return
+                    }
+                }
+
+                // println "Unable to find " + library
+            }
+
+            config.libraryPaths = libraryPaths
+            config.libraryNames = libraries
+            config.projectName = projectName
+            config.arduinoHome = arduinoHome
+
+            // def test = new File('arduino.prefs')
+            // test.write(os.toString())
         }
     }
-    cmd << file.absolutePath
-    cmd << "-o" + object_file.name
-
-    exec_cmd(cmd)
-
-    return object_file
 }
 
-def link(sketch_object_files) {
-    def cmd = []
-    cmd << "$arduinoDir/hardware/tools/avr/bin/avr-gcc"
-    cmd << "-Os"
-    cmd << "-mmcu=$cpuName"
-    cmd << "-o$buildDir/${entry}.elf"
-    sketch_object_files.each {
-        cmd << it.absolutePath
+def build_file(file) {
+    def objectFile = new File(buildDir, file.name + ".o")
+
+    if (file.lastModified() < objectFile.lastModified()) {
+        return objectFile
     }
-    cmd << buildDir.absolutePath + "/core.a"
-    cmd << "-L$buildDir"
-    cmd << "-lm"
-    exec_cmd(cmd)
+
+    logger.info("Compiling ${file.name}")
+
+    def boolean isCpp = file.getPath() =~ /.*${File.separator}.cpp/ || file.getPath() =~ /.*${File.separator}.ino/
+    def String compileCommand = isCpp ? config.getCppCommand(file, objectFile) : config.getCCommand(file, objectFile)
+
+    logger.debug(compileCommand)
+    execute(compileCommand)
+
+    return objectFile
 }
 
-def objcopy() {
-    def cmd = ["$arduinoDir/hardware/tools/avr/bin/avr-objcopy",
-        "-O",
-        "ihex",
-        "-j",
-        ".eeprom",
-        "--set-section-flags=.eeprom=alloc,load",
-        "--no-change-warnings",
-        "--change-section-lma",
-        ".eeprom=0",
-        "$buildDir/${entry}.elf",
-        "$buildDir/${entry}.eep"]
-    exec_cmd(cmd)
+task build(dependsOn: [configure]) << {
+    def sketchFiles = []
+    def arduinoFiles = []
+    def sketchObjectFiles = []
+    def arduinoObjectFiles = []   
 
-    cmd = ["$arduinoDir/hardware/tools/avr/bin/avr-objcopy",
-        "-O",
-        "ihex",
-        "-R",
-        ".eeprom",
-        "$buildDir/${entry}.elf",
-        "$buildDir/${entry}.hex"]
-    exec_cmd(cmd)
-}
+    config.gatherSourceFiles(sketchFiles, projectDir)
+    config.gatherSourceFiles(arduinoFiles, new File(config.buildCorePath))  
+    config.gatherSourceFiles(arduinoFiles, new File(config.buildVariantPath))  
 
-def can_skip_archive(index, arduino_object_files) {
-    def result = true
-    arduino_object_files.each { obj ->
-        if (!index.containsKey(obj.name))
-            result = false
-        else if (obj.lastModified() > index[obj.name])
-            result = false
+    config.libraryPaths.each { path -> 
+        config.gatherSourceFiles(arduinoFiles, path)  
     }
 
-    return result
-}
-
-task build << {
-    buildDir.mkdirs()
-    def sketch_files = []
-    def arduino_files = []
-    def sketch_object_files = []
-    def arduino_object_files = []   
-    def library_directories = []
-
-    get_properties()
-
-    enum_source_files(sketch_files, projectDir)
-    enum_source_files(arduino_files, new File("$arduinoCoresDir/$core"))  
-
-    libraries.each { library -> 
-        def library_directory = new File(librariesDir, library)
-        if (library_directory.exists() && library_directory.isDirectory()) {
-            library_directories << library_directory
-            enum_source_files(arduino_files, library_directory)
-            println library_directory
-            return
-        }
-
-        library_directory = new File(projectLibrariesDir, library)
-        if (library_directory.exists() && library_directory.isDirectory()) {
-            library_directories  << library_directory
-            enum_source_files(arduino_files, library_directory)
-            println library_directory
-            return
-        }
-
-        println "Unable to find " + library
+    sketchFiles.each {
+        sketchObjectFiles << build_file(it)
     }
 
-    println "Compiling source files"
-    sketch_files.each {
-        sketch_object_files << build_file(it, library_directories)
+    arduinoFiles.each {
+        arduinoObjectFiles << build_file(it)
     }
 
-    arduino_files.each {
-        arduino_object_files << build_file(it, library_directories)
+    logger.info("Archiving")
+
+    arduinoObjectFiles.each {
+        def String archiveCommand = config.getArCommand(it, "core.a")
+        logger.debug(archiveCommand)
+        execute(archiveCommand)
     }
 
-    def archive_index = extract_archive_index()
+    logger.info("Linking")
 
-    if (!can_skip_archive(archive_index, arduino_object_files)) {
-        println "Archiving object files"
-        archive_index.clear()
-        arduino_object_files.each {
-            archive_object_file(it)
-            archive_index[it.name] = it.lastModified()
-        }
-        save_archive_index(archive_index)
+    def String linkCommand = config.getLinkCommand(sketchObjectFiles, "core.a")
+    logger.debug(linkCommand)
+    execute(linkCommand)
+
+    config.getObjCopyCommands().each {
+        logger.debug(it)
+        execute(it)
     }
-
-    println "Linking"
-    link(sketch_object_files)
-
-    objcopy()
 }
 
 task upload(dependsOn: build) << {
-    def cmd = ["$arduinoDir/hardware/tools/avrdude",
-        "-C$arduinoDir/hardware/tools/avrdude.conf",
+    def cmd = ["$arduinoHome/hardware/tools/avrdude",
+        "-C$arduinoHome/hardware/tools/avrdude.conf",
         "-v",
         "-p$cpuName",
         "-carduino",
@@ -319,11 +322,72 @@ task upload(dependsOn: build) << {
         "-b115200",
         "-D",
         "-Uflash:w:$buildDir/${entry}.hex:i"]
-    exec_cmd(cmd)
+    execute(cmd)
 }
 
 task clean << {
     ant.delete(dir: buildDir)
+}
+
+class CommandLine {
+    static String[] translateCommandLine(String toProcess) {
+        if (toProcess == null || toProcess.length() == 0) {
+            return new String[0];
+        }
+
+        final int normal = 0;
+        final int inQuote = 1;
+        final int inDoubleQuote = 2;
+        int state = normal;
+        final StringTokenizer tok = new StringTokenizer(toProcess, "\"\' ", true);
+        final ArrayList<String> result = new ArrayList<String>();
+        final StringBuilder current = new StringBuilder();
+        boolean lastTokenHasBeenQuoted = false;
+
+        while (tok.hasMoreTokens()) {
+            String nextTok = tok.nextToken();
+            switch (state) {
+            case inQuote:
+                if ("\'".equals(nextTok)) {
+                    lastTokenHasBeenQuoted = true;
+                    state = normal;
+                } else {
+                    current.append(nextTok);
+                }
+                break;
+            case inDoubleQuote:
+                if ("\"".equals(nextTok)) {
+                    lastTokenHasBeenQuoted = true;
+                    state = normal;
+                } else {
+                    current.append(nextTok);
+                }
+                break;
+            default:
+                if ("\'".equals(nextTok)) {
+                    state = inQuote;
+                } else if ("\"".equals(nextTok)) {
+                    state = inDoubleQuote;
+                } else if (" ".equals(nextTok)) {
+                    if (lastTokenHasBeenQuoted || current.length() != 0) {
+                        result.add(current.toString());
+                        current.setLength(0);
+                    }
+                } else {
+                    current.append(nextTok);
+                }
+                lastTokenHasBeenQuoted = false;
+                break;
+            }
+        }
+        if (lastTokenHasBeenQuoted || current.length() != 0) {
+            result.add(current.toString());
+        }
+        if (state == inQuote || state == inDoubleQuote) {
+            throw new RuntimeException("unbalanced quotes in " + toProcess);
+        }
+        return result.toArray(new String[result.size()]);
+    }
 }
 
 // vim: set ft=groovy:

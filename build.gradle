@@ -1,15 +1,19 @@
 apply from: 'arduino.gradle'
 
 ext.libraries = [
-    "SoftwareSerial"
+    // "SoftwareSerial"
+    "SPI"
 ]
-ext.board = "arduino:avr:uno"
-ext.entry = "Blink.ino"
-ext.core = "arduino"
-ext.variant = "standard"
-ext.cpuName = "atmega328p"
-ext.cpuClock = "16000000L"
-ext.projectLibrariesDir = "../../okavango/libraries/"
+
+ext.defaultBoard = "adafruit:samd:adafruit_feather_m0"
+ext.boards = [
+    "arduino:avr:uno",,
+    "adafruit:avr:feather32u4",
+    "adafruit:samd:adafruit_feather_m0"
+]
+ext.projectName = "Blink.ino"
+ext.projectLibrariesDir = "$projectDir/libraries"
+ext.arduinoPackagesDir = "C:/Source/okavango/arduino"
 
 // vim: set ft=groovy:
 
