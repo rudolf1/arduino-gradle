@@ -1,0 +1,14 @@
+apply from: 'arduino.gradle'
+
+ext.sketchMainFile = "Blink.ino"
+
+ext.core = "arduino"
+
+ext.variant = "standard"
+
+ext.cpuName = "atmega328p"
+
+ext.cpuClock = "16000000L"
+
+// vim: set ft=groovy:
+
