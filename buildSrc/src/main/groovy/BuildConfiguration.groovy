@@ -195,6 +195,10 @@ class BuildConfiguration {
         return hasKey("upload.use_1200bps_touch")
     }
 
+    String getUsbProduct() {
+        return this.preferences["build.usb_product"].replace('"', "")
+    }
+
     private String getBossacUploadCommand(String serial) {
         Properties props = new Properties()
         props.putAll(this.preferences)

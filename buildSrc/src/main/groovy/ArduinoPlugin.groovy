@@ -28,6 +28,14 @@ class ArduinoPlugin implements Plugin<Project> {
             }
         }
 
+        project.task("showPossiblePorts") << {
+            def builder = createBuildConfiguration(project, project.arduino.defaultBoard)
+            def ports = SerialPort.getCommPorts().findAll { it.descriptivePortName.contains builder.usbProduct }
+            ports.each {
+                println it.descriptivePortName
+            }
+        }
+
         project.task('upload', dependsOn: 'build') << {
             def newPort = lastBuild.use1200BpsTouch ? Uploader.perform1200bpsTouch("COM35") : "COM35"
             if (!newPort)  {
