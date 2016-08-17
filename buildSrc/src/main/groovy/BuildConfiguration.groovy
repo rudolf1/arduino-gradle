@@ -169,12 +169,16 @@ class BuildConfiguration {
         return libraryPaths;
     }
 
+    private String getUploadTool() {
+        return this.preferences."upload.tool"
+    }
+
     private boolean isBossac() {
-        return this.preferences."upload.tool" == "bossac"
+        return uploadTool == "bossac"
     }
 
     private boolean isAvrDude() {
-        return this.preferences."upload.tool" == "avrdude"
+        return uploadTool == "avrdude" || uploadTool == "arduino:avrdude"
     }
 
     String getUploadCommand(String serial) {
@@ -184,7 +188,11 @@ class BuildConfiguration {
         if (this.isAvrDude()) {
             return getAvrDudeUploadCommand(serial);
         }
-        throw new GradleException("Unknown upload.tool!")
+        throw new GradleException("Unknown upload.tool: " + uploadTool)
+    }
+
+    boolean getUse1200BpsTouch() {
+        return hasKey("upload.use_1200bps_touch")
     }
 
     private String getBossacUploadCommand(String serial) {

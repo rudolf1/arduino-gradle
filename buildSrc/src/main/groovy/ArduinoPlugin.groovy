@@ -1,6 +1,7 @@
 import org.gradle.api.*
 import org.gradle.api.plugins.*
 import java.lang.ProcessBuilder
+import com.fazecast.jSerialComm.*
 
 class ArduinoPlugin implements Plugin<Project> {
     void apply(Project project) {
@@ -20,12 +21,25 @@ class ArduinoPlugin implements Plugin<Project> {
             }
         }
 
+        project.task("showPorts") << {
+            def ports = SerialPort.getCommPorts()
+            ports.each {
+                println it.descriptivePortName
+            }
+        }
+
         project.task('upload', dependsOn: 'build') << {
-            def uploadCommand = lastBuild.getUploadCommand("COM10")
+            def newPort = lastBuild.use1200BpsTouch ? Uploader.perform1200bpsTouch("COM35") : "COM35"
+            if (!newPort)  {
+                throw new GradleException("No port") 
+            }
+
+            def uploadCommand = lastBuild.getUploadCommand(newPort)
+            def parsed = CommandLine.translateCommandLine(uploadCommand)
             logger.debug(uploadCommand)
             println(uploadCommand)
 
-            def processBuilder = new ProcessBuilder(uploadCommand)
+            def processBuilder = new ProcessBuilder(parsed)
             processBuilder.redirectErrorStream(true)
             processBuilder.directory(project.projectDir)
             def process = processBuilder.start()

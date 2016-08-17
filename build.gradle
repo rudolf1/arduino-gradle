@@ -7,7 +7,8 @@ arduino {
     ]
 
     // defaultBoard = "adafruit:samd:adafruit_feather_m0"
-    defaultBoard = "arduino:avr:uno"
+    defaultBoard = "adafruit:avr:feather32u4"
+    // defaultBoard = "arduino:avr:uno"
     boards = [
         "arduino:avr:uno",,
         "adafruit:avr:feather32u4",
