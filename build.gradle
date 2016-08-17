@@ -5,7 +5,8 @@ ext.libraries = [
     "SPI"
 ]
 
-ext.defaultBoard = "adafruit:samd:adafruit_feather_m0"
+// ext.defaultBoard = "adafruit:samd:adafruit_feather_m0"
+ext.defaultBoard = "arduino:avr:uno"
 ext.boards = [
     "arduino:avr:uno",,
     "adafruit:avr:feather32u4",

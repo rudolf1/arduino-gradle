@@ -118,12 +118,16 @@ class BuildConfiguration {
         return getKey(props, "recipe.ar.pattern")
     }
 
+    private boolean hasKey(String key) {
+        return this.preferences[key] != null
+    }
+
     String[] getObjCopyCommands() {
         Properties props = new Properties()
         props["build.project_name"] = projectName
         props.putAll(this.preferences)
 
-        if (getKey(props, "recipe.objcopy.bin.pattern")) {
+        if (hasKey("recipe.objcopy.bin.pattern")) {
             return [
                 getKey(props, "recipe.objcopy.bin.pattern"),
             ]
@@ -169,6 +173,48 @@ class BuildConfiguration {
             // println "Unable to find " + library
         }
         return libraryPaths;
+    }
+
+    private boolean isBossac() {
+        return this.preferences."upload.tool" == "bossac"
+    }
+
+    private boolean isAvrDude() {
+        return this.preferences."upload.tool" == "avrdude"
+    }
+
+    String getUploadCommand(String serial) {
+        if (this.isBossac()) {
+            return getBossacUploadCommand(serial);
+        }
+        if (this.isAvrDude()) {
+            return getAvrDudeUploadCommand(serial);
+        }
+        throw new GradleException("Unknown upload.tool!")
+    }
+
+    private String getBossacUploadCommand(String serial) {
+        Properties props = new Properties()
+        props.putAll(this.preferences)
+        props["cmd"] = getKey(props, "tools.bossac.cmd")
+        props["path"] = getKey(props, "tools.bossac.path")
+        props["upload.verbose"] = "-i -d"
+        props["serial.port.file"] = serial
+        props["build.project_name"] = projectName
+        return getKey(props, "tools.bossac.upload.pattern")
+    }
+
+    private String getAvrDudeUploadCommand(String serial) {
+        Properties props = new Properties()
+        props.putAll(this.preferences)
+        props["path"] = getKey(props, "tools.avrdude.path")
+        props["cmd.path"] = getKey(props, "tools.avrdude.cmd.path")
+        props["config.path"] = getKey(props, "tools.avrdude.config.path")
+        props["upload.verbose"] = ""
+        props["upload.verify"] = "-v"
+        props["serial.port"] = serial
+        props["build.project_name"] = projectName
+        return getKey(props, "tools.avrdude.upload.pattern")
     }
 
     void gatherSourceFiles(list, dir) {
@@ -310,16 +356,9 @@ task build(dependsOn: [configure]) << {
 }
 
 task upload(dependsOn: build) << {
-    def cmd = ["$arduinoHome/hardware/tools/avrdude",
-        "-C$arduinoHome/hardware/tools/avrdude.conf",
-        "-v",
-        "-p$cpuName",
-        "-carduino",
-        "-P$arduinoComPort",
-        "-b115200",
-        "-D",
-        "-Uflash:w:$buildDir/${entry}.hex:i"]
-    execute(cmd)
+    def uploadCommand = config.getUploadCommand("COM37")
+    logger.debug(uploadCommand)
+    execute(uploadCommand)
 }
 
 task clean << {
