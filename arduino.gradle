@@ -1,9 +1,6 @@
-//apply from: 'properties.gradle'
-
 ext.arduinoCoresDir = "$arduinoDir/hardware/arduino/avr/cores/"
 ext.arduinoVariantsDir = "$arduinoDir/hardware/arduino/avr/variants/"
-ext.librariesDir = "$arduinoDir/libraries/"
-ext.projectLibrariesDir = "$buildDir/../../libraries/"
+ext.librariesDir = "$arduinoDir/hardware/arduino/avr/libraries/"
 
 buildscript {
     repositories {
@@ -13,28 +10,6 @@ buildscript {
     dependencies {
         classpath 'net.java.dev.jna:jna:3.4.0' 
         classpath 'net.java.dev.jna:platform:3.4.0' 
-    }
-}
-
-class StreamGobbler extends Thread {
-    BufferedInputStream source;
-    BufferedOutputStream dest;
-
-    StreamGobbler(InputStream source, OutputStream dest) {
-        this.source = new BufferedInputStream(source);
-        this.dest = new BufferedOutputStream(dest);
-    }
-
-    public void run() {
-        try {           
-            byte[] b = new byte[100]
-            int size = 0;
-            while ((size = source.read(b)) > 0)
-                dest.write(b, 0, size)
-            dest.flush()
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-        }
     }
 }
 
@@ -115,24 +90,58 @@ def archive_object_file(object_file) {
     exec_cmd(cmd)
 }
 
+def should_skip_directory(dir) {
+    return dir.absolutePath.contains(File.separator + "examples") ||
+           dir.absolutePath.contains(File.separator + ".git") ||
+           dir.absolutePath.contains(File.separator + ".svn")
+}
+
 def enum_source_files(list, dir) {
-    dir.eachFileMatch(~/.*\.c/) {
+    dir.eachFileMatch(~/.*${File.separator}.c/) {
         list << it
     }
 
-    dir.eachFileMatch(~/.*\.cpp/) {
+    dir.eachFileMatch(~/.*${File.separator}.cpp/) {
         list << it
     }
 
-    dir.eachFileMatch(~/.*\.ino/) {
+    dir.eachFileMatch(~/.*${File.separator}.ino/) {
         list << it
     }
 
     dir.eachDirRecurse() {
-        if (!it.absolutePath.contains("/examples") && !it.absolutePath.contains("/.svn")) {
+        if (!should_skip_directory(it)) {
             enum_source_files(list, it)
         }
     }
+}
+
+def get_properties() {
+    exec_cmd(["${arduinoDir}/arduino-builder",
+             "-dump-prefs",
+             "-logger=machine",
+             "-hardware",
+             "${arduinoDir}/hardware",
+             "-hardware",
+             "${extraArduinoDir}/packages",
+             "-tools",
+             "${arduinoDir}/tools-builder",
+             "-tools",
+             "${arduinoDir}/hardware/tools/avr",
+             "-tools",
+             "${extraArduinoDir}/packages",
+             "-built-in-libraries",
+             "${arduinoDir}/libraries",
+             "-libraries",
+             "${projectLibrariesDir}",
+             "-fqbn=${board}",
+             "-ide-version=10609",
+             "-build-path",
+             "${buildDir}",
+             "-warnings=none",
+             "-prefs=build.warn_data_percentage=75",
+             "-verbose"])
+
 }
 
 def build_file(file, libraries) {
@@ -146,8 +155,8 @@ def build_file(file, libraries) {
 
     println "Compiling ${file.name}"
 
-    def boolean cpp = file.getPath() =~ /.*\.cpp/
-    cpp = cpp || file.getPath() =~ /.*\.ino/
+    def boolean cpp = file.getPath() =~ /.*${File.separator}.cpp/
+    cpp = cpp || file.getPath() =~ /.*${File.separator}.ino/
 
     def noexceptions = cpp ? "-fno-exceptions" : ""
     def compiler = cpp ? "avr-g++" : "avr-gcc"
@@ -176,8 +185,9 @@ def build_file(file, libraries) {
     libraries.each { library ->
         cmd << "-I${library.absolutePath}"
         library.eachDirRecurse() {
-            if (!it.absolutePath.contains("/examples") && !it.absolutePath.contains("/.svn"))
+            if (!should_skip_directory(it)) {
                 cmd << "-I${it.absolutePath}"
+            }
         }
     }
     cmd << file.absolutePath
@@ -192,10 +202,8 @@ def link(sketch_object_files) {
     def cmd = []
     cmd << "$arduinoDir/hardware/tools/avr/bin/avr-gcc"
     cmd << "-Os"
-    // cmd << "-Wl"
-    // cmd << "--gc-sections"
     cmd << "-mmcu=$cpuName"
-    cmd << "-o$buildDir/${sketchMainFile}.elf"
+    cmd << "-o$buildDir/${entry}.elf"
     sketch_object_files.each {
         cmd << it.absolutePath
     }
@@ -215,8 +223,8 @@ def objcopy() {
         "--no-change-warnings",
         "--change-section-lma",
         ".eeprom=0",
-        "$buildDir/${sketchMainFile}.elf",
-        "$buildDir/${sketchMainFile}.eep"]
+        "$buildDir/${entry}.elf",
+        "$buildDir/${entry}.eep"]
     exec_cmd(cmd)
 
     cmd = ["$arduinoDir/hardware/tools/avr/bin/avr-objcopy",
@@ -224,9 +232,9 @@ def objcopy() {
         "ihex",
         "-R",
         ".eeprom",
-        "$buildDir/${sketchMainFile}.elf",
-        "$buildDir/${sketchMainFile}.hex"]
-        exec_cmd(cmd)
+        "$buildDir/${entry}.elf",
+        "$buildDir/${entry}.hex"]
+    exec_cmd(cmd)
 }
 
 def can_skip_archive(index, arduino_object_files) {
@@ -241,57 +249,46 @@ def can_skip_archive(index, arduino_object_files) {
     return result
 }
 
-def enum_includes(file) {
-    def result = []
-    def reader = file.newReader()
-    def line = null
-    // Pattern copied from Arduino IDE source code: processing.app.preproc.PdePreprocessor.java
-    def include_pattern = ~/^\s*#include\s+[<"](\S+)[">]/
-    while ((line = reader.readLine()) != null) {
-        def matcher = include_pattern.matcher(line)
-        if (matcher.matches()) {
-            def header = matcher[0][1]
-            if (header.endsWith(".h"))
-                header = header.substring(0, header.length() -2)
-                result << header
-        }
-    }  
-
-    return result;
-}
-
 task build << {
     buildDir.mkdirs()
     def sketch_files = []
     def arduino_files = []
     def sketch_object_files = []
     def arduino_object_files = []   
-    def libraries = []
+    def library_directories = []
+
+    get_properties()
+
     enum_source_files(sketch_files, projectDir)
     enum_source_files(arduino_files, new File("$arduinoCoresDir/$core"))  
 
-    def includes = enum_includes(new File(projectDir, sketchMainFile))
-    includes.each { include ->
-        def libdir = new File(librariesDir, include)
-        if (libdir.exists() && libdir.isDirectory()) {
-            libraries << libdir
-            enum_source_files(arduino_files, libdir)
+    libraries.each { library -> 
+        def library_directory = new File(librariesDir, library)
+        if (library_directory.exists() && library_directory.isDirectory()) {
+            library_directories << library_directory
+            enum_source_files(arduino_files, library_directory)
+            println library_directory
+            return
         }
 
-        libdir = new File(projectLibrariesDir, include)
-        if (libdir.exists() && libdir.isDirectory()) {
-            libraries << libdir
-            enum_source_files(arduino_files, libdir)
+        library_directory = new File(projectLibrariesDir, library)
+        if (library_directory.exists() && library_directory.isDirectory()) {
+            library_directories  << library_directory
+            enum_source_files(arduino_files, library_directory)
+            println library_directory
+            return
         }
+
+        println "Unable to find " + library
     }
 
     println "Compiling source files"
     sketch_files.each {
-        sketch_object_files << build_file(it, libraries)
+        sketch_object_files << build_file(it, library_directories)
     }
 
     arduino_files.each {
-        arduino_object_files << build_file(it, libraries)
+        arduino_object_files << build_file(it, library_directories)
     }
 
     def archive_index = extract_archive_index()
@@ -321,8 +318,8 @@ task upload(dependsOn: build) << {
         "-P$arduinoComPort",
         "-b115200",
         "-D",
-        "-Uflash:w:$buildDir/${sketchMainFile}.hex:i"]
-         exec_cmd(cmd)
+        "-Uflash:w:$buildDir/${entry}.hex:i"]
+    exec_cmd(cmd)
 }
 
 task clean << {

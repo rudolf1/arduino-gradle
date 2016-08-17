@@ -1,14 +1,15 @@
 apply from: 'arduino.gradle'
 
-ext.sketchMainFile = "Blink.ino"
-
+ext.libraries = [
+    "SoftwareSerial"
+]
+ext.board = "arduino:avr:uno"
+ext.entry = "Blink.ino"
 ext.core = "arduino"
-
 ext.variant = "standard"
-
 ext.cpuName = "atmega328p"
-
 ext.cpuClock = "16000000L"
+ext.projectLibrariesDir = "../../okavango/libraries/"
 
 // vim: set ft=groovy:
 
