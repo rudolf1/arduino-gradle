@@ -45,6 +45,9 @@ def execute(cmd) {
     }
 }
 
+import groovy.util.logging.Slf4j
+
+@Slf4j
 class BuildConfiguration {
     Properties preferences
     String arduinoHome
@@ -149,6 +152,25 @@ class BuildConfiguration {
         return paths
     }
 
+    String[] getLibraryPaths() {
+        def libraryPaths = []
+        libraryNames.each { library -> 
+            log.info("Searching for $library...")
+            getLibrariesSearchPath().each { librariesDir ->
+                log.debug("Checking $librariesDir...")
+                def libraryDirectory = new File(librariesDir, library)
+                if (libraryDirectory.exists() && libraryDirectory.isDirectory()) {
+                    libraryPaths << libraryDirectory
+                    log.info("Found $libraryDirectory!")
+                    return
+                }
+            }
+
+            // println "Unable to find " + library
+        }
+        return libraryPaths;
+    }
+
     void gatherSourceFiles(list, dir) {
         dir.eachFileMatch(~/.*${File.separator}.c/) {
             list << it
@@ -212,42 +234,25 @@ ext.config = new BuildConfiguration()
 
 task configure(dependsOn:[prepareBuild]) {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            config.board = defaultBoard
+        config.libraryNames = libraries
+        config.projectName = projectName
+        config.arduinoHome = arduinoHome
+        config.board = defaultBoard
 
+        new ByteArrayOutputStream().withStream { os ->
             def data = exec {
                 standardOutput = os
                 commandLine = getPreferencesCommandLine(config.board)
             }
 
-            config.preferences = new Properties()
+            def friendlyName = config.board.replace(":", "-")
+            def localCopy = new File(buildDir, "arduino.${friendlyName}.prefs")
+            localCopy.write(os.toString())
 
-            // This is pretty annoying.
-            config.preferences.load(new StringReader(os.toString().replace("\\", "\\\\")))
+            def preferences = new Properties()
+            preferences.load(new StringReader(os.toString().replace("\\", "\\\\")))
 
-            def libraryPaths = []
-            libraries.each { library -> 
-                logger.info("Searching for $library...")
-                config.getLibrariesSearchPath().each { librariesDir ->
-                    logger.debug("Checking $librariesDir...")
-                    def libraryDirectory = new File(librariesDir, library)
-                    if (libraryDirectory.exists() && libraryDirectory.isDirectory()) {
-                        libraryPaths << libraryDirectory
-                        logger.info("Found $libraryDirectory!")
-                        return
-                    }
-                }
-
-                // println "Unable to find " + library
-            }
-
-            config.libraryPaths = libraryPaths
-            config.libraryNames = libraries
-            config.projectName = projectName
-            config.arduinoHome = arduinoHome
-
-            // def test = new File('arduino.prefs')
-            // test.write(os.toString())
+            config.preferences = preferences
         }
     }
 }
@@ -271,26 +276,18 @@ def build_file(file) {
 }
 
 task build(dependsOn: [configure]) << {
-    def sketchFiles = []
     def arduinoFiles = []
-    def sketchObjectFiles = []
-    def arduinoObjectFiles = []   
-
-    config.gatherSourceFiles(sketchFiles, projectDir)
     config.gatherSourceFiles(arduinoFiles, new File(config.buildCorePath))  
     config.gatherSourceFiles(arduinoFiles, new File(config.buildVariantPath))  
-
     config.libraryPaths.each { path -> 
         config.gatherSourceFiles(arduinoFiles, path)  
     }
 
-    sketchFiles.each {
-        sketchObjectFiles << build_file(it)
-    }
+    def sketchFiles = []
+    config.gatherSourceFiles(sketchFiles, projectDir)
 
-    arduinoFiles.each {
-        arduinoObjectFiles << build_file(it)
-    }
+    def sketchObjectFiles = sketchFiles.collect { build_file(it) }
+    def arduinoObjectFiles = arduinoFiles.collect { build_file(it) }
 
     logger.info("Archiving")
 
