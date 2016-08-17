@@ -26,14 +26,16 @@ class ArduinoPlugin implements Plugin<Project> {
             println(uploadCommand)
 
             def processBuilder = new ProcessBuilder(uploadCommand)
-            processBuilder.redirectOutput(ProcessBuilder.Redirect.INHERIT)
-            processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT)
+            processBuilder.redirectErrorStream(true)
             processBuilder.directory(project.projectDir)
-              
-            def p = processBuilder.start()
-            // RunCommand.run(uploadCommand, project.projectDir, true)
-            // def p = uploadCommand.execute()
-            p.waitFor()
+            def process = processBuilder.start()
+            def InputStream so = process.getInputStream()
+            def BufferedReader reader = new BufferedReader(new InputStreamReader(so))
+            def line
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line)
+            }
+            process.waitFor()
         }
 
         project.task('clean') << {
