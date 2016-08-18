@@ -14,6 +14,8 @@ class RunCommand {
         def process = Runtime.runtime.exec(cmd as String[], [] as String[], workingDir)
         def running = true
 
+        process.getOutputStream().close()
+
         def bufferPrinter = { buffer ->
             def lastIndex = 0
             while (running) {
