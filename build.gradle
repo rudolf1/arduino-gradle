@@ -16,7 +16,7 @@ arduino {
     ]
     projectName = "Blink.ino"
     projectLibrariesDir = "$projectDir/libraries"
-    arduinoPackagesDir = "C:/Source/okavango/arduino"
+    arduinoPackagesDir = "../arduino-packages"
 }
 
 // vim: set ft=groovy:
