@@ -81,6 +81,7 @@ class BuildConfiguration {
         Properties props = new Properties()
         props["object_files"] = objectFiles.join(" ")
         props["archive_file"] = archiveFile
+        props["archive_file_path"] = new File(buildDir, archiveFile).toString()
         props["build.project_name"] = projectName
         props.putAll(this.preferences)
         return getKey(props, "recipe.c.combine.pattern")
@@ -108,6 +109,7 @@ class BuildConfiguration {
         Properties props = new Properties()
         props["object_file"] = object.toString()
         props["archive_file"] = archive.toString()
+        props["archive_file_path"] = new File(buildDir, archive).toString()
         props.putAll(this.preferences)
         return getKey(props, "recipe.ar.pattern")
     }
