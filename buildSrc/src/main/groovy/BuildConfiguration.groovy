@@ -31,7 +31,7 @@ class BuildConfiguration {
         }
 
         def sketchFiles = []
-        gatherSourceFiles(sketchFiles, projectDir)
+        gatherSourceFiles(sketchFiles, projectDir, false)
 
         def sketchObjectFiles = sketchFiles.collect { buildFile(it) }
         def arduinoObjectFiles = arduinoFiles.collect { buildFile(it) }
@@ -227,22 +227,24 @@ class BuildConfiguration {
         return board.replace(":", "-")
     }
 
-    void gatherSourceFiles(list, dir) {
-        dir.eachFileMatch(~/.*${File.separator}.c/) {
+    void gatherSourceFiles(list, dir, recurse = true) {
+        dir.eachFileMatch(~/.*\.c$/) {
             list << it
         }
 
-        dir.eachFileMatch(~/.*${File.separator}.cpp/) {
+        dir.eachFileMatch(~/.*\.cpp$/) {
             list << it
         }
 
-        dir.eachFileMatch(~/.*${File.separator}.ino/) {
+        dir.eachFileMatch(~/.*\.ino$/) {
             list << it
         }
 
-        dir.eachDirRecurse() {
-            if (!shouldSkipDirectory(it)) {
-                gatherSourceFiles(list, it)
+        if (recurse) {
+            dir.eachDirRecurse() {
+                if (!shouldSkipDirectory(it)) {
+                    gatherSourceFiles(list, it)
+                }
             }
         }
     }
