@@ -3,7 +3,7 @@ import org.gradle.api.*
 class RunCommand {
     static String run(String cmd, File workingDir, boolean echo = false) {
         def split = CommandLine.translateCommandLine(cmd)
-        def fixed = split.collect { it.replace('"', "\\\"") }
+        def fixed = split.collect { DoubleQuotedArgumentsOnWindowsCommandLine.fixArgument(it) }
         return run(fixed as String[], workingDir, echo)
     }
 
