@@ -1,5 +1,7 @@
 import org.gradle.api.*
+import groovy.util.logging.Slf4j
 
+@Slf4j
 class RunCommand {
     static String run(String cmd, File workingDir, boolean echo = false) {
         def split = CommandLine.translateCommandLine(cmd)
@@ -10,6 +12,8 @@ class RunCommand {
     static String run(String[] cmd, File workingDir, boolean echo = false) {
         def so = new StringBuffer()
         def se = new StringBuffer()
+
+        log.info(cmd.join(" "))
 
         def process = Runtime.runtime.exec(cmd as String[], [] as String[], workingDir)
         def running = true

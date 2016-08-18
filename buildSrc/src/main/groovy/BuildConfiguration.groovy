@@ -23,6 +23,8 @@ class BuildConfiguration {
     }
 
     void build() {
+        log.lifecycle("Building for ${board}")
+
         def arduinoFiles = []
         gatherSourceFiles(arduinoFiles, new File(buildCorePath))  
         gatherSourceFiles(arduinoFiles, new File(buildVariantPath))  
@@ -36,7 +38,7 @@ class BuildConfiguration {
         def sketchObjectFiles = sketchFiles.collect { buildFile(it) }
         def arduinoObjectFiles = arduinoFiles.collect { buildFile(it) }
 
-        log.info("Archiving")
+        log.lifecycle("Archiving")
 
         arduinoObjectFiles.each {
             def String archiveCommand = getArCommand(it, "core.a")
@@ -44,7 +46,7 @@ class BuildConfiguration {
             execute(archiveCommand)
         }
 
-        log.info("Linking")
+        log.lifecycle("Linking")
 
         def String linkCommand = getLinkCommand(sketchObjectFiles, "core.a")
         log.debug(linkCommand)
@@ -262,7 +264,7 @@ class BuildConfiguration {
             return objectFile
         }
 
-        log.info("Compiling ${file.name}")
+        log.lifecycle("Compiling ${file.name}")
 
         def boolean isCpp = file.getPath() =~ /.*${File.separator}.cpp/ || file.getPath() =~ /.*${File.separator}.ino/
         def String compileCommand = isCpp ? getCppCommand(file, objectFile) : getCCommand(file, objectFile)
