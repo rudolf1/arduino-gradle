@@ -1,3 +1,14 @@
 build
 gradle.properties
 .gradle
+arduino-1.6.11
+gradle-3.0
+gradle-3.0-bin.zip
+arduino-1.6.11-linux32.tar.xz
+arduino-1.6.6-linux32.tar.xz
+arduino-1.6.7-linux32.tar.xz
+arduino-1.6.9-linux32.tar.xz
+arduino-1.6.11
+arduino-1.6.6
+arduino-1.6.7
+arduino-1.6.9
