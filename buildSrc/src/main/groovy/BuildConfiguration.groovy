@@ -31,7 +31,6 @@ class BuildConfiguration {
         gatherSourceFiles(projectFiles, projectDir, false)
 
         provideMain = anyInoOrPdeFiles(projectFiles)
-        println provideMain
 
         def arduinoFiles = []
         gatherSourceFiles(arduinoFiles, new File(buildCorePath), true) {
