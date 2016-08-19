@@ -11,6 +11,7 @@ class BuildConfiguration {
     File projectDir
     File originalBuildDir
     String board
+    boolean provideMain
 
     String[] getLibrariesSearchPath() {
         return [
@@ -26,9 +27,12 @@ class BuildConfiguration {
         log.lifecycle("Building for ${board}")
 
         def arduinoFiles = []
-        gatherSourceFiles(arduinoFiles, new File(buildCorePath))  
-        gatherSourceFiles(arduinoFiles, new File(buildVariantPath))  
-        libraryPaths.each { path -> 
+        gatherSourceFiles(arduinoFiles, new File(buildCorePath), true) {
+            if (provideMain) return true
+            return !(it.name =~ /main.(c|cpp)/)
+        }
+        gatherSourceFiles(arduinoFiles, new File(buildVariantPath))
+        libraryPaths.each { path ->
             gatherSourceFiles(arduinoFiles, path)  
         }
 
@@ -231,17 +235,23 @@ class BuildConfiguration {
         return board.replace(":", "-")
     }
 
-    void gatherSourceFiles(list, dir, recurse = true) {
+    void gatherSourceFiles(list, dir, recurse = true, Closure closure = { f -> true }) {
         dir.eachFileMatch(~/.*\.c$/) {
-            list << it
+            if (closure(it)) {
+                list << it
+            }
         }
 
         dir.eachFileMatch(~/.*\.cpp$/) {
-            list << it
+            if (closure(it)) {
+                list << it
+            }
         }
 
         dir.eachFileMatch(~/.*\.ino$/) {
-            list << it
+            if (closure(it)) {
+                list << it
+            }
         }
 
         if (recurse) {

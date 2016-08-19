@@ -106,6 +106,7 @@ class ArduinoPlugin implements Plugin<Project> {
         config.projectName = project.arduino.projectName
         config.arduinoHome = project.arduinoHome
         config.projectDir = project.projectDir
+        config.provideMain = project.arduino.provideMain
         config.originalBuildDir = project.buildDir
         config.board = board
 

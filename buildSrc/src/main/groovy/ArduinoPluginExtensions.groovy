@@ -5,4 +5,5 @@ class ArduinoPluginExtension {
     def String projectLibrariesDir
     def String arduinoPackagesDir
     def String[] libraries = []
+    def boolean provideMain = true
 }
