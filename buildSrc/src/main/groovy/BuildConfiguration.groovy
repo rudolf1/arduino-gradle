@@ -268,7 +268,7 @@ class BuildConfiguration {
 
         log.lifecycle("Compiling ${file.name}")
 
-        def boolean isCpp = file.getPath() =~ /.*${File.separator}.cpp/ || file.getPath() =~ /.*${File.separator}.ino/
+        def boolean isCpp = file.getPath() =~ /.*\.cpp/ || file.getPath() =~ /.*\.ino/
         def String compileCommand = isCpp ? getCppCommand(file, objectFile) : getCCommand(file, objectFile)
 
         log.debug(compileCommand)
