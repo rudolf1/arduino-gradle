@@ -41,7 +41,10 @@ class ArduinoPlugin implements Plugin<Project> {
                 throw new GradleException("Please provide a Serial Port")
             }
 
-            def newPort = lastBuild.use1200BpsTouch ? Uploader.perform1200bpsTouch(project.port) : project.port
+            def String specifiedPort = project.port
+            println specifiedPort
+            println lastBuild.use1200BpsTouch
+            def newPort = Uploader.discoverPort(specifiedPort, lastBuild.use1200BpsTouch)
             if (!newPort)  {
                 throw new GradleException("No port") 
             }
