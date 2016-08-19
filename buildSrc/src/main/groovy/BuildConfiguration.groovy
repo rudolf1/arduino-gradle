@@ -27,6 +27,12 @@ class BuildConfiguration {
     void build() {
         log.lifecycle("Building for ${board}")
 
+        def projectFiles = []
+        gatherSourceFiles(projectFiles, projectDir, false)
+
+        provideMain = anyInoOrPdeFiles(projectFiles)
+        println provideMain
+
         def arduinoFiles = []
         gatherSourceFiles(arduinoFiles, new File(buildCorePath), true) {
             if (provideMain) return true
@@ -37,10 +43,7 @@ class BuildConfiguration {
             gatherSourceFiles(arduinoFiles, path)  
         }
 
-        def sketchFiles = []
-        gatherSourceFiles(sketchFiles, projectDir, false)
-
-        def sketchObjectFiles = sketchFiles.collect { buildFile(it) }
+        def projectObjectFiles = projectFiles.collect { buildFile(it) }
         def arduinoObjectFiles = arduinoFiles.collect { buildFile(it) }
 
         if (wasAnythingCompiled) {
@@ -52,7 +55,7 @@ class BuildConfiguration {
             }
 
             log.lifecycle("Linking")
-            def String linkCommand = getLinkCommand(sketchObjectFiles, "core.a")
+            def String linkCommand = getLinkCommand(projectObjectFiles, "core.a")
             log.debug(linkCommand)
             execute(linkCommand)
 
@@ -234,6 +237,10 @@ class BuildConfiguration {
 
     String getPathFriendlyBoardName() {
         return board.replace(":", "-")
+    }
+
+    boolean anyInoOrPdeFiles(files) {
+        return files.findAll { it.name =~ /.*\.(ino|pde)/ }.size() > 0
     }
 
     void gatherSourceFiles(list, dir, recurse = true, Closure closure = { f -> true }) {
