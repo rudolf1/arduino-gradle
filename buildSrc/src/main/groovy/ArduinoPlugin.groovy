@@ -2,10 +2,19 @@ import org.gradle.api.*
 import org.gradle.api.plugins.*
 import java.lang.ProcessBuilder
 import com.fazecast.jSerialComm.*
+import groovy.util.logging.Slf4j
 
+@Slf4j
 class ArduinoPlugin implements Plugin<Project> {
     void apply(Project project) {
         project.extensions.create("arduino", ArduinoPluginExtension)
+
+        project.arduino.home = guessArduinoHomeIfNecessary(project)
+
+        if (!project.arduino.home) {
+            log.error("No arduinoHome configured or available!")
+            throw new GradleException("No arduinoHome configured or available!")
+        }
 
         def BuildConfiguration lastBuild;
 
@@ -72,21 +81,21 @@ class ArduinoPlugin implements Plugin<Project> {
     }
 
     private String[] getPreferencesCommandLine(Project project, BuildConfiguration config) {
-        return ["${project.arduinoHome}/arduino-builder",
+        return ["${project.arduino.home}/arduino-builder",
                  "-dump-prefs",
                  "-logger=machine",
                  "-hardware",
-                 "${project.arduinoHome}/hardware",
+                 "${project.arduino.home}/hardware",
                  "-hardware",
                  "${project.arduino.arduinoPackagesDir}/packages",
                  "-tools",
-                 "${project.arduinoHome}/tools-builder",
+                 "${project.arduino.home}/tools-builder",
                  "-tools",
-                 "${project.arduinoHome}/hardware/tools/avr",
+                 "${project.arduino.home}/hardware/tools/avr",
                  "-tools",
                  "${project.arduino.arduinoPackagesDir}/packages",
                  "-built-in-libraries",
-                 "${project.arduinoHome}/libraries",
+                 "${project.arduino.home}/libraries",
                  "-libraries",
                  "${project.arduino.projectLibrariesDir}",
                  "-fqbn=${config.board}",
@@ -102,7 +111,7 @@ class ArduinoPlugin implements Plugin<Project> {
 
         config.libraryNames = project.arduino.libraries
         config.projectName = project.arduino.projectName
-        config.arduinoHome = project.arduinoHome
+        config.arduinoHome = project.arduino.home
         config.projectDir = project.projectDir
         config.provideMain = project.arduino.provideMain
         config.originalBuildDir = project.buildDir
@@ -127,6 +136,33 @@ class ArduinoPlugin implements Plugin<Project> {
         config.preferences = preferences
 
         return config
+    }
+
+    private String[] arduinoHomeSearchPaths() {
+        return [
+            "../arduino-*/arduino-builder*",
+            "arduino-*/arduino-builder*"
+        ]
+    }
+
+    private String guessArduinoHomeIfNecessary(Project project) {
+        if (project.hasProperty("arduinoHome") && project.arduinoHome) {
+            return project.arduinoHome
+        }
+
+        def candidates = arduinoHomeSearchPaths().collect {
+            def tree = project.fileTree(project.projectDir)
+            return tree.include(it)
+        }.collect { it.files }.flatten().unique().sort()
+
+        if (candidates.size() == 1) {
+            return candidates[0].parent
+        }
+        else if (candidates.size() > 1) {
+            println candidates
+        }
+
+        return null
     }
 
 }

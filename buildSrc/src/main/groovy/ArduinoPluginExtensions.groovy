@@ -7,4 +7,5 @@ class ArduinoPluginExtension {
     def String[] libraries = []
     def boolean provideMain = true
     def String[] preprocessorDefines = []
+    def String home
 }

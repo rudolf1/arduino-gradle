@@ -25,7 +25,7 @@ class RunCommand {
             while (running) {
                 def length = buffer.length()
                 if (length > lastIndex) {
-                    print buffer.subSequence(lastIndex, length)
+                    // print buffer.subSequence(lastIndex, length)
                     lastIndex = length
                 }
                 Thread.sleep(100)
