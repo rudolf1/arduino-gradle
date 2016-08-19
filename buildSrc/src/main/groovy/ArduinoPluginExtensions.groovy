@@ -6,4 +6,5 @@ class ArduinoPluginExtension {
     def String arduinoPackagesDir
     def String[] libraries = []
     def boolean provideMain = true
+    def String[] preprocessorDefines = []
 }

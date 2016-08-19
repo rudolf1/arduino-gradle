@@ -120,6 +120,10 @@ class ArduinoPlugin implements Plugin<Project> {
         def preferences = new Properties()
         preferences.load(new StringReader(data.replace("\\", "\\\\")))
 
+        def extraFlags = project.arduino.preprocessorDefines.collect { "-D" + it }.join(" ")
+        preferences["compiler.c.extra_flags"] += " " + extraFlags
+        preferences["compiler.cpp.extra_flags"] += " " + extraFlags
+
         config.preferences = preferences
 
         return config
