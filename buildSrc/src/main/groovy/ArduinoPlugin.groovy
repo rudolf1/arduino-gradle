@@ -42,8 +42,6 @@ class ArduinoPlugin implements Plugin<Project> {
             }
 
             def String specifiedPort = project.port
-            println specifiedPort
-            println lastBuild.use1200BpsTouch
             def newPort = Uploader.discoverPort(specifiedPort, lastBuild.use1200BpsTouch)
             if (!newPort)  {
                 throw new GradleException("No port") 

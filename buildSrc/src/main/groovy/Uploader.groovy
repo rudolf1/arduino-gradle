@@ -2,12 +2,11 @@ import com.fazecast.jSerialComm.*
 
 class Uploader {
     static String perform1200bpsTouch(String portName) {
-        def portNamesBefore = portNames
         def serialPort = SerialPort.getCommPort(portName)
         serialPort.setBaudRate(1200)
         if (serialPort.openPort()) {
             serialPort.closePort()
-            return lookForNewPort(5)
+            return lookForNewPort(portNames, 5)
         }
 
         return null
@@ -48,7 +47,7 @@ class Uploader {
             return lookForNewPort(portNames, 20)
         }
 
-        return null
+        return newPort
     }
 
     static String[] getPortNames() {

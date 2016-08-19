@@ -12,6 +12,7 @@ class BuildConfiguration {
     File originalBuildDir
     String board
     boolean provideMain
+    boolean wasAnythingCompiled
 
     String[] getLibrariesSearchPath() {
         return [
@@ -42,23 +43,23 @@ class BuildConfiguration {
         def sketchObjectFiles = sketchFiles.collect { buildFile(it) }
         def arduinoObjectFiles = arduinoFiles.collect { buildFile(it) }
 
-        log.lifecycle("Archiving")
+        if (wasAnythingCompiled) {
+            log.lifecycle("Archiving")
+            arduinoObjectFiles.each {
+                def String archiveCommand = getArCommand(it, "core.a")
+                log.debug(archiveCommand)
+                execute(archiveCommand)
+            }
 
-        arduinoObjectFiles.each {
-            def String archiveCommand = getArCommand(it, "core.a")
-            log.debug(archiveCommand)
-            execute(archiveCommand)
-        }
+            log.lifecycle("Linking")
+            def String linkCommand = getLinkCommand(sketchObjectFiles, "core.a")
+            log.debug(linkCommand)
+            execute(linkCommand)
 
-        log.lifecycle("Linking")
-
-        def String linkCommand = getLinkCommand(sketchObjectFiles, "core.a")
-        log.debug(linkCommand)
-        execute(linkCommand)
-
-        getObjCopyCommands().each {
-            log.debug(it)
-            execute(it)
+            getObjCopyCommands().each {
+                log.debug(it)
+                execute(it)
+            }
         }
     }
 
@@ -283,6 +284,8 @@ class BuildConfiguration {
 
         log.debug(compileCommand)
         execute(compileCommand)
+
+        wasAnythingCompiled = true
 
         return objectFile
     }
