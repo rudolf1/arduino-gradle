@@ -11,21 +11,17 @@ apply plugin: 'com.github.jlewallen.arduino'
 
 arduino {
   libraries = [
-    // "SoftwareSerial"
     "SPI"
   ]
 
-  // defaultBoard = "adafruit:samd:adafruit_feather_m0"
   defaultBoard = "adafruit:avr:feather32u4"
-  // defaultBoard = "arduino:avr:uno"
   boards = [
-    "arduino:avr:uno",,
+    "arduino:avr:uno",
     "adafruit:avr:feather32u4",
     "adafruit:samd:adafruit_feather_m0"
   ]
-  projectName = "Blink.ino"
+  projectName = "blink.ino"
   projectLibrariesDir = "$projectDir/../libraries"
-  arduinoPackagesDir = "../../../arduino-packages"
 }
 
 // vim: set ft=groovy:

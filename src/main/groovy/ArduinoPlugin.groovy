@@ -12,6 +12,7 @@ class ArduinoPlugin implements Plugin<Project> {
         project.extensions.create("arduino", ArduinoPluginExtension)
 
         project.arduino.home = guessArduinoHomeIfNecessary(project)
+        project.arduino.arduinoPackagesDir = guessArduinoPackagesDirectoryIfNecessary(project)
 
         if (!project.arduino.home) {
             log.error("No arduinoHome configured or available!")
@@ -147,13 +148,25 @@ class ArduinoPlugin implements Plugin<Project> {
         ]
     }
 
+    private String guessArduinoPackagesDirectoryIfNecessary(Project project) {
+        if (project.arduino.arduinoPackagesDir) {
+            return project.arduino.arduinoPackagesDir
+        }
+
+        return new File(new File(project.arduino.home).parent, "arduino-packages")
+    }
+
     private String guessArduinoHomeIfNecessary(Project project) {
         if (project.hasProperty("arduinoHome") && project.arduinoHome) {
-            return project.arduinoHome
+            File file = new File(project.arduinoHome)
+            if (file.isAbsolute()) {
+                return file
+            }
+            return new File(project.rootProject.projectDir, project.arduinoHome)
         }
 
         def candidates = arduinoHomeSearchPaths().collect {
-            def tree = project.fileTree(project.projectDir)
+            def tree = project.fileTree(project.rootProject.projectDir)
             return tree.include(it)
         }.collect { it.files }.flatten().unique().sort()
 
