@@ -13,6 +13,8 @@ class BuildConfiguration {
     File projectDir
     File originalBuildDir
     String board
+    boolean provideMain
+    boolean wasAnythingCompiled
 
     String[] getLibrariesSearchPath() {
         return [
@@ -25,36 +27,43 @@ class BuildConfiguration {
     }
 
     void build() {
+        log.lifecycle("Building for ${board}")
+
+        def projectFiles = []
+        gatherSourceFiles(projectFiles, projectDir, false)
+
+        provideMain = anyInoOrPdeFiles(projectFiles)
+
         def arduinoFiles = []
-        gatherSourceFiles(arduinoFiles, new File(buildCorePath))  
-        gatherSourceFiles(arduinoFiles, new File(buildVariantPath))  
-        libraryPaths.each { path -> 
+        gatherSourceFiles(arduinoFiles, new File(buildCorePath), true) {
+            if (provideMain) return true
+            return !(it.name =~ /main.(c|cpp)/)
+        }
+        gatherSourceFiles(arduinoFiles, new File(buildVariantPath))
+        libraryPaths.each { path ->
             gatherSourceFiles(arduinoFiles, path)  
         }
 
-        def sketchFiles = []
-        gatherSourceFiles(sketchFiles, projectDir)
-
-        def sketchObjectFiles = sketchFiles.collect { buildFile(it) }
+        def projectObjectFiles = projectFiles.collect { buildFile(it) }
         def arduinoObjectFiles = arduinoFiles.collect { buildFile(it) }
 
-        log.info("Archiving")
+        if (wasAnythingCompiled) {
+            log.lifecycle("Archiving")
+            arduinoObjectFiles.each {
+                def String archiveCommand = getArCommand(it, "core.a")
+                log.debug(archiveCommand)
+                execute(archiveCommand)
+            }
 
-        arduinoObjectFiles.each {
-            def String archiveCommand = getArCommand(it, "core.a")
-            log.debug(archiveCommand)
-            execute(archiveCommand)
-        }
+            log.lifecycle("Linking")
+            def String linkCommand = getLinkCommand(projectObjectFiles, "core.a")
+            log.debug(linkCommand)
+            execute(linkCommand)
 
-        log.info("Linking")
-
-        def String linkCommand = getLinkCommand(sketchObjectFiles, "core.a")
-        log.debug(linkCommand)
-        execute(linkCommand)
-
-        getObjCopyCommands().each {
-            log.debug(it)
-            execute(it)
+            getObjCopyCommands().each {
+                log.debug(it)
+                execute(it)
+            }
         }
     }
 
@@ -83,6 +92,7 @@ class BuildConfiguration {
         Properties props = new Properties()
         props["object_files"] = objectFiles.join(" ")
         props["archive_file"] = archiveFile
+        props["archive_file_path"] = new File(buildDir, archiveFile).toString()
         props["build.project_name"] = projectName
         props.putAll(this.preferences)
         return getKey(props, "recipe.c.combine.pattern")
@@ -110,6 +120,7 @@ class BuildConfiguration {
         Properties props = new Properties()
         props["object_file"] = object.toString()
         props["archive_file"] = archive.toString()
+        props["archive_file_path"] = new File(buildDir, archive).toString()
         props.putAll(this.preferences)
         return getKey(props, "recipe.ar.pattern")
     }
@@ -229,22 +240,34 @@ class BuildConfiguration {
         return board.replace(":", "-")
     }
 
-    void gatherSourceFiles(list, dir) {
-        dir.eachFileMatch(~/.*${File.separator}.c/) {
-            list << it
+    boolean anyInoOrPdeFiles(files) {
+        return files.findAll { it.name =~ /.*\.(ino|pde)/ }.size() > 0
+    }
+
+    void gatherSourceFiles(list, dir, recurse = true, Closure closure = { f -> true }) {
+        dir.eachFileMatch(~/.*\.c$/) {
+            if (closure(it)) {
+                list << it
+            }
         }
 
-        dir.eachFileMatch(~/.*${File.separator}.cpp/) {
-            list << it
+        dir.eachFileMatch(~/.*\.cpp$/) {
+            if (closure(it)) {
+                list << it
+            }
         }
 
-        dir.eachFileMatch(~/.*${File.separator}.ino/) {
-            list << it
+        dir.eachFileMatch(~/.*\.ino$/) {
+            if (closure(it)) {
+                list << it
+            }
         }
 
-        dir.eachDirRecurse() {
-            if (!shouldSkipDirectory(it)) {
-                gatherSourceFiles(list, it)
+        if (recurse) {
+            dir.eachDirRecurse() {
+                if (!shouldSkipDirectory(it)) {
+                    gatherSourceFiles(list, it)
+                }
             }
         }
     }
@@ -262,13 +285,15 @@ class BuildConfiguration {
             return objectFile
         }
 
-        log.info("Compiling ${file.name}")
+        log.lifecycle("Compiling ${file.name}")
 
-        def boolean isCpp = file.getPath() =~ /.*${File.separator}.cpp/ || file.getPath() =~ /.*${File.separator}.ino/
+        def boolean isCpp = file.getPath() =~ /.*\.cpp/ || file.getPath() =~ /.*\.ino/
         def String compileCommand = isCpp ? getCppCommand(file, objectFile) : getCCommand(file, objectFile)
 
         log.debug(compileCommand)
         execute(compileCommand)
+
+        wasAnythingCompiled = true
 
         return objectFile
     }

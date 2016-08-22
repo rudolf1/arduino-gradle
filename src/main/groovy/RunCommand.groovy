@@ -1,11 +1,13 @@
 package com.github.jlewallen.arduino;
 
 import org.gradle.api.*
+import groovy.util.logging.Slf4j
 
+@Slf4j
 class RunCommand {
     static String run(String cmd, File workingDir, boolean echo = false) {
         def split = CommandLine.translateCommandLine(cmd)
-        def fixed = split.collect { it.replace('"', "\\\"") }
+        def fixed = split.collect { DoubleQuotedArgumentsOnWindowsCommandLine.fixArgument(it) }
         return run(fixed as String[], workingDir, echo)
     }
 
@@ -13,15 +15,19 @@ class RunCommand {
         def so = new StringBuffer()
         def se = new StringBuffer()
 
+        log.info(cmd.join(" "))
+
         def process = Runtime.runtime.exec(cmd as String[], [] as String[], workingDir)
         def running = true
+
+        process.getOutputStream().close()
 
         def bufferPrinter = { buffer ->
             def lastIndex = 0
             while (running) {
                 def length = buffer.length()
                 if (length > lastIndex) {
-                    print buffer.subSequence(lastIndex, length)
+                    // print buffer.subSequence(lastIndex, length)
                     lastIndex = length
                 }
                 Thread.sleep(100)
