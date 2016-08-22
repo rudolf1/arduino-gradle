@@ -27,8 +27,15 @@ class BuildConfiguration {
             paths << this.projectLibrariesDir
         }
 
-        def buildCoreTree = project.fileTree(new File(this.preferences."runtime.platform.path"))
+        def buildCoreTree = project.fileTree(new File(arduinoHome, "hardware/" + buildCore))
         buildCoreTree.visit { details ->
+            if (details.file.name == 'libraries') {
+                paths << details.file
+            }
+        }
+
+        def runtimePlatformTree = project.fileTree(new File(this.preferences."runtime.platform.path"))
+        runtimePlatformTree.visit { details ->
             if (details.file.name == 'libraries') {
                 paths << details.file
             }
@@ -61,7 +68,6 @@ class BuildConfiguration {
 
         gatherSourceFiles(arduinoFiles, new File(buildVariantPath))
         this.getLibraryPaths().each { path ->
-            println path
             gatherSourceFiles(arduinoFiles, path)  
         }
 
