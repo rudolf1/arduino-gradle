@@ -27,7 +27,7 @@ class BuildConfiguration {
             paths << this.projectLibrariesDir
         }
 
-        def buildCoreTree = project.fileTree(new File(arduinoHome, 'hardware/' + buildCore))
+        def buildCoreTree = project.fileTree(new File(this.preferences."runtime.platform.path"))
         buildCoreTree.visit { details ->
             if (details.file.name == 'libraries') {
                 paths << details.file
