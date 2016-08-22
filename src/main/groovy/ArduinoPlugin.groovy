@@ -118,6 +118,7 @@ class ArduinoPlugin implements Plugin<Project> {
         config.projectDir = project.projectDir
         config.provideMain = project.arduino.provideMain
         config.originalBuildDir = project.buildDir
+        config.projectLibrariesDir = new File(project.arduino.projectLibrariesDir)
         config.project = project
         config.board = board
 

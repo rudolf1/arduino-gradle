@@ -1,7 +1,7 @@
 package com.github.jlewallen.arduino;
 
-import org.gradle.api.*
 import groovy.util.logging.Slf4j
+import org.gradle.api.*
 
 @Slf4j
 class BuildConfiguration {
@@ -12,6 +12,7 @@ class BuildConfiguration {
     File[] libraryPaths
     File projectDir
     File originalBuildDir
+    File projectLibrariesDir
     String board
     boolean provideMain
     boolean wasAnythingCompiled
@@ -21,6 +22,10 @@ class BuildConfiguration {
         def paths = [
             new File("$arduinoHome/libraries")
         ]
+
+        if (this.projectLibrariesDir) {
+            paths << this.projectLibrariesDir
+        }
 
         def buildCoreTree = project.fileTree(new File(arduinoHome, 'hardware/' + buildCore))
         buildCoreTree.visit { details ->
