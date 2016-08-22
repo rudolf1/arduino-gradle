@@ -1,3 +1,5 @@
+package com.github.jlewallen.arduino;
+
 import com.fazecast.jSerialComm.*
 
 class Uploader {

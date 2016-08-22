@@ -1,3 +1,5 @@
+package com.github.jlewallen.arduino;
+
 import org.gradle.api.*
 import groovy.util.logging.Slf4j
 

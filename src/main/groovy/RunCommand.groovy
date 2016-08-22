@@ -1,3 +1,5 @@
+package com.github.jlewallen.arduino;
+
 import org.gradle.api.*
 
 class RunCommand {

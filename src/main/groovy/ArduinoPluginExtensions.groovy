@@ -1,3 +1,5 @@
+package com.github.jlewallen.arduino;
+
 class ArduinoPluginExtension {
     def String projectName
     def String defaultBoard

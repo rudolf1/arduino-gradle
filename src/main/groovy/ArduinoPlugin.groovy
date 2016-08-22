@@ -1,3 +1,5 @@
+package com.github.jlewallen.arduino;
+
 import org.gradle.api.*
 import org.gradle.api.plugins.*
 import java.lang.ProcessBuilder

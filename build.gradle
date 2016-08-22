@@ -1,22 +1,22 @@
-apply plugin: ArduinoPlugin
+apply plugin: 'groovy'
+apply plugin: 'maven'
 
-arduino {
-    libraries = [
-        // "SoftwareSerial"
-        "SPI"
-    ]
-
-    // defaultBoard = "adafruit:samd:adafruit_feather_m0"
-    defaultBoard = "adafruit:avr:feather32u4"
-    // defaultBoard = "arduino:avr:uno"
-    boards = [
-        "arduino:avr:uno",,
-        "adafruit:avr:feather32u4",
-        "adafruit:samd:adafruit_feather_m0"
-    ]
-    projectName = "Blink.ino"
-    projectLibrariesDir = "$projectDir/libraries"
-    arduinoPackagesDir = "C:/Source/okavango/arduino"
+repositories {
+    mavenCentral()
 }
 
-// vim: set ft=groovy:
+group = 'com.github.jlewallen.arduino'
+version = '1.0'
+
+uploadArchives {
+  repositories {
+    mavenLocal()
+  }
+}
+
+dependencies {
+    compile gradleApi()
+    compile localGroovy()
+    compile 'com.fazecast:jSerialComm:1.3.11'
+}
+

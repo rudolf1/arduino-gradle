@@ -1,3 +1,5 @@
+package com.github.jlewallen.arduino;
+
 class CommandLine {
     static String[] translateCommandLine(String toProcess) {
         if (toProcess == null || toProcess.length() == 0) {
