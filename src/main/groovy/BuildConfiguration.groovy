@@ -304,7 +304,9 @@ class BuildConfiguration {
     private boolean shouldSkipDirectory(dir) {
         return dir.absolutePath.contains(File.separator + "examples") ||
                dir.absolutePath.contains(File.separator + ".git") ||
-               dir.absolutePath.contains(File.separator + ".svn")
+               dir.absolutePath.contains(File.separator + ".svn") ||
+               dir.absolutePath.contains(File.separator + "tests") ||
+               dir.absolutePath.contains(File.separator + "test")
     }
 
     private File buildFile(file) {
