@@ -15,11 +15,21 @@ class BuildConfiguration {
     String board
     boolean provideMain
     boolean wasAnythingCompiled
+    Project project
 
-    String[] getLibrariesSearchPath() {
-        return [
-            "$arduinoHome/libraries"
-        ];
+    File[] getLibrariesSearchPath() {
+        def paths = [
+            new File("$arduinoHome/libraries")
+        ]
+
+        def buildCoreTree = project.fileTree(new File(arduinoHome, 'hardware/' + buildCore))
+        buildCoreTree.visit { details ->
+            if (details.file.name == 'libraries') {
+                paths << details.file
+            }
+        }
+
+        return paths;
     }
 
     File getBuildDir() {
@@ -32,6 +42,10 @@ class BuildConfiguration {
         def projectFiles = []
         gatherSourceFiles(projectFiles, projectDir, false)
 
+        if (projectFiles.size() == 0) {
+          throw new GradleException("No project files found in $projectDir")
+        }
+
         provideMain = anyInoOrPdeFiles(projectFiles)
 
         def arduinoFiles = []
@@ -39,8 +53,10 @@ class BuildConfiguration {
             if (provideMain) return true
             return !(it.name =~ /main.(c|cpp)/)
         }
+
         gatherSourceFiles(arduinoFiles, new File(buildVariantPath))
-        libraryPaths.each { path ->
+        this.getLibraryPaths().each { path ->
+            println path
             gatherSourceFiles(arduinoFiles, path)  
         }
 
@@ -65,6 +81,10 @@ class BuildConfiguration {
                 execute(it)
             }
         }
+    }
+
+    String getBuildCore() {
+        return this.preferences."build.core"
     }
 
     String getBuildCorePath() {
@@ -151,7 +171,7 @@ class BuildConfiguration {
             buildVariantPath
         ]
 
-        libraryPaths.each { library ->
+        this.getLibraryPaths().each { library ->
             paths << library.absolutePath
             library.eachDirRecurse() {
                 if (!shouldSkipDirectory(it)) {
@@ -163,21 +183,25 @@ class BuildConfiguration {
         return paths
     }
 
-    String[] getLibraryPaths() {
+    File[] getLibraryPaths() {
         def libraryPaths = []
-        libraryNames.each { library -> 
+        this.libraryNames.each { library -> 
             log.info("Searching for $library...")
-            getLibrariesSearchPath().each { librariesDir ->
-                log.debug("Checking $librariesDir...")
+            def boolean found = false
+            this.getLibrariesSearchPath().each { librariesDir ->
+                log.info("Checking $librariesDir...")
                 def libraryDirectory = new File(librariesDir, library)
                 if (libraryDirectory.exists() && libraryDirectory.isDirectory()) {
                     libraryPaths << libraryDirectory
+                    found = true
                     log.info("Found $libraryDirectory!")
                     return
                 }
             }
 
-            throw new GradleException("Unable to find " + library)
+            if (!found) {
+                throw new GradleException("Unable to find " + library)
+            }
         }
         return libraryPaths;
     }
@@ -244,7 +268,7 @@ class BuildConfiguration {
         return files.findAll { it.name =~ /.*\.(ino|pde)/ }.size() > 0
     }
 
-    void gatherSourceFiles(list, dir, recurse = true, Closure closure = { f -> true }) {
+    void gatherSourceFiles(ArrayList list, File dir, boolean recurse = true, Closure closure = { f -> true }) {
         dir.eachFileMatch(~/.*\.c$/) {
             if (closure(it)) {
                 list << it
