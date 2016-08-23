@@ -27,17 +27,22 @@ class BuildConfiguration {
             paths << this.projectLibrariesDir
         }
 
-        def buildCoreTree = project.fileTree(new File(arduinoHome, "hardware/" + buildCore))
-        buildCoreTree.visit { details ->
+        def runtimePlatformTree = project.fileTree(new File(this.preferences."runtime.platform.path"))
+        runtimePlatformTree.visit { details ->
             if (details.file.name == 'libraries') {
                 paths << details.file
             }
         }
 
-        def runtimePlatformTree = project.fileTree(new File(this.preferences."runtime.platform.path"))
-        runtimePlatformTree.visit { details ->
-            if (details.file.name == 'libraries') {
-                paths << details.file
+        // There has to be a better way, this breaks for other cores though and
+        // for the feather32u4 to get the AVR SoftwareSerial it's necessary. I'm sure
+        // I'll stumble upon a better way eventually.
+        if (buildVariant == "feather32u4") {
+            def buildCoreTree = project.fileTree(new File(arduinoHome, "hardware/" + buildCore))
+            buildCoreTree.visit { details ->
+                if (details.file.name == 'libraries') {
+                    paths << details.file
+                }
             }
         }
 
@@ -100,6 +105,10 @@ class BuildConfiguration {
 
     String getBuildCorePath() {
         return this.preferences."build.core.path"
+    }
+
+    String getBuildVariant() {
+        return this.preferences."build.variant"
     }
 
     String getBuildVariantPath() {
