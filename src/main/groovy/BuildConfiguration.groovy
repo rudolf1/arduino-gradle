@@ -211,8 +211,11 @@ class BuildConfiguration {
 
         def defines = []
         patterns.each { pattern ->
-            pattern.findAll(/-D\S+/) { define ->
-                defines << define
+            def args = CommandLine.translateCommandLine(pattern)
+            args.each { define ->
+                if (define.startsWith("-D")) {
+                    defines << define
+                }
             }
         }
         return defines.unique()
