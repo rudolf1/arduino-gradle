@@ -73,7 +73,7 @@ class BuildConfiguration {
 
         gatherSourceFiles(arduinoFiles, new File(buildVariantPath))
         this.getLibraryPaths().each { path ->
-            gatherSourceFiles(arduinoFiles, path)  
+            gatherSourceFiles(arduinoFiles, path)
         }
 
         def projectObjectFiles = projectFiles.collect { buildFile(it) }
@@ -203,9 +203,24 @@ class BuildConfiguration {
         return paths
     }
 
+    String[] getPreprocessorDefines() {
+        def patterns = [
+            getKey(this.preferences, "recipe.c.o.pattern"),
+            getKey(this.preferences, "recipe.cpp.o.pattern")
+        ]
+
+        def defines = []
+        patterns.each { pattern ->
+            pattern.findAll(/-D\S+/) { define ->
+                defines << define
+            }
+        }
+        return defines.unique()
+    }
+
     File[] getLibraryPaths() {
         def libraryPaths = []
-        this.libraryNames.each { library -> 
+        this.libraryNames.each { library ->
             log.info("Searching for $library...")
             def boolean found = false
             this.getLibrariesSearchPath().each { librariesDir ->

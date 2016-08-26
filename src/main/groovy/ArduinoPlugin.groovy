@@ -56,7 +56,7 @@ class ArduinoPlugin implements Plugin<Project> {
             def String specifiedPort = project.port
             def newPort = Uploader.discoverPort(specifiedPort, lastBuild.use1200BpsTouch)
             if (!newPort)  {
-                throw new GradleException("No port") 
+                throw new GradleException("No port")
             }
 
             def uploadCommand = lastBuild.getUploadCommand(newPort)
@@ -75,6 +75,19 @@ class ArduinoPlugin implements Plugin<Project> {
                 System.out.println(line)
             }
             process.waitFor()
+        }
+
+        project.task('clangComplete') << {
+            def builder = createBuildConfiguration(project, project.arduino.defaultBoard)
+            def ccFile = new File('.clang_complete')
+            ccFile.withWriter('UTF-8') { writer ->
+                builder.includes.each {
+                    writer.write("-I" + it + "\n")
+                }
+                builder.preprocessorDefines.each { it
+                    writer.write(it + "\n")
+                }
+            }
         }
 
         project.task('clean') << {
