@@ -89,6 +89,15 @@ class UploadTask extends DefaultTask {
 }
 
 @Managed
+interface ArduinoInstallation {
+    void setHome(String packagesDir)
+    String getHome()
+
+    void setPackagesDir(String packagesDir)
+    String getPackagesDir()
+}
+
+@Managed
 interface ArduinoComponentSpec extends GeneralComponentSpec {
     void setBoards(List<String> boards)
     List<String> getBoards()
@@ -112,19 +121,6 @@ interface ArduinoBinarySpec extends BinarySpec {
 @Slf4j
 class ArduinoPlugin implements Plugin<Project> {
     void apply(Project project) {
-        project.extensions.create("arduino", ArduinoPluginExtension)
-
-        project.arduino.home = guessArduinoHomeIfNecessary(project)
-        if (project.arduino.home == null) {
-            throw new GradleException("No ArduinoHome!");
-        }
-        project.arduino.arduinoPackagesDir = guessArduinoPackagesDirectoryIfNecessary(project)
-
-        if (!project.arduino.home) {
-            log.error("No arduinoHome configured or available!")
-            throw new GradleException("No arduinoHome configured or available!")
-        }
-
         project.task("showPorts") << {
             def ports = SerialPort.getCommPorts()
             ports.each {
@@ -133,27 +129,26 @@ class ArduinoPlugin implements Plugin<Project> {
         }
     }
 
-    private static String[] getPreferencesCommandLine(Project project, BuildConfiguration config) {
-        List<String> parts = []
-        parts.addAll(["${project.arduino.home}/arduino-builder",
-                      "-dump-prefs",
-                      "-logger=machine",
-                      "-hardware",
-                      "${project.arduino.home}/hardware",
-                      "-hardware",
-                      "${project.arduino.arduinoPackagesDir}/packages",
-                      "-tools",
-                      "${project.arduino.home}/tools-builder",
-                      "-tools",
-                      "${project.arduino.home}/hardware/tools/avr",
-                      "-tools",
-                      "${project.arduino.arduinoPackagesDir}/packages",
-                      "-built-in-libraries",
-                      "${project.arduino.home}/libraries"])
+    private static String[] getPreferencesCommandLine(ArduinoInstallation installation, BuildConfiguration config) {
+        List<String> parts = ["${installation.home}/arduino-builder",
+                              "-dump-prefs",
+                              "-logger=machine",
+                              "-hardware",
+                              "${installation.home}/hardware",
+                              "-hardware",
+                              "${installation.packagesDir}/packages",
+                              "-tools",
+                              "${installation.home}/tools-builder",
+                              "-tools",
+                              "${installation.home}/hardware/tools/avr",
+                              "-tools",
+                              "${installation.packagesDir}/packages",
+                              "-built-in-libraries",
+                              "${installation.home}/libraries"]
 
-        if (project.arduino.projectLibrariesDir) {
+        if (config.projectLibrariesDir) {
             parts.add("-libraries")
-            parts.add("${project.arduino.projectLibrariesDir}")
+            parts.add("${config.projectLibrariesDir}")
         }
 
         parts.addAll(["-fqbn=${config.board}",
@@ -165,14 +160,14 @@ class ArduinoPlugin implements Plugin<Project> {
         return parts.toArray()
     }
 
-    public static BuildConfiguration createBuildConfiguration(Project project, String arduinoHome, List<String> libraryNames,
+    public static BuildConfiguration createBuildConfiguration(Project project, ArduinoInstallation installation, List<String> libraryNames,
                                                               String projectName, String projectLibrariesDir, List<String> preprocessorDefines,
                                                               String board) {
         def config = new BuildConfiguration()
 
         config.libraryNames = libraryNames
         config.projectName = projectName
-        config.arduinoHome = arduinoHome
+        config.arduinoHome = installation.home
         config.projectDir = project.projectDir
         config.originalBuildDir = project.buildDir
         config.projectLibrariesDir = projectLibrariesDir ? new File((String)projectLibrariesDir) : null
@@ -181,7 +176,7 @@ class ArduinoPlugin implements Plugin<Project> {
 
         config.buildDir.mkdirs()
 
-        def preferencesCommand = getPreferencesCommandLine(project, config)
+        def preferencesCommand = getPreferencesCommandLine(installation, config)
         def String data = RunCommand.run(preferencesCommand, project.projectDir)
 
         def friendlyName = config.pathFriendlyBoardName
@@ -200,46 +195,60 @@ class ArduinoPlugin implements Plugin<Project> {
         return config
     }
 
-    private String[] arduinoHomeSearchPaths() {
-        return [
-            "../arduino-*/arduino-builder*",
-            "arduino-*/arduino-builder*"
-        ]
-    }
-
-    private String guessArduinoPackagesDirectoryIfNecessary(Project project) {
-        if (project.arduino.arduinoPackagesDir) {
-            return project.arduino.arduinoPackagesDir
-        }
-
-        return new File(new File((String)project.arduino.home).parent, "arduino-packages")
-    }
-
-    private String guessArduinoHomeIfNecessary(Project project) {
-        if (project.hasProperty("arduinoHome") && project.arduinoHome) {
-            File file = new File(project.arduinoHome)
-            if (file.isAbsolute()) {
-                return file
-            }
-            return new File(project.rootProject.projectDir, project.arduinoHome)
-        }
-
-        def candidates = arduinoHomeSearchPaths().collect {
-            def tree = project.fileTree(project.rootProject.projectDir)
-            return tree.include(it)
-        }.collect { it.files }.flatten().unique().sort()
-
-        if (candidates.size() == 1) {
-            return candidates[0].parent
-        }
-        else if (candidates.size() > 1) {
-            println candidates
-        }
-
-        return null
-    }
-
     static class Rules extends RuleSource {
+        @Model
+        public static void arduinoInstallation(ArduinoInstallation arduinoInstallation) {
+        }
+
+        @Defaults
+        public static void defaultInstallation(ArduinoInstallation arduinoInstallation, ProjectIdentifier projectId, @Path("buildDir") File buildDir) {
+            def Project project = (Project)projectId // Hack
+
+            def String home = guessArduinoHomeIfNecessary(project)
+            if (home == null) {
+                log.error("No arduinoHome configured or available!")
+                throw new GradleException("No arduinoHome configured or available!")
+            }
+
+            arduinoInstallation.home = home
+            arduinoInstallation.packagesDir = guessArduinoPackagesDirectoryIfNecessary(home)
+        }
+
+        private static String guessArduinoPackagesDirectoryIfNecessary(String home) {
+            return new File(new File(home).parent, "arduino-packages")
+        }
+
+        private static String[] arduinoHomeSearchPaths() {
+            return [
+                "../arduino-*/arduino-builder*",
+                "arduino-*/arduino-builder*"
+            ]
+        }
+
+        private static String guessArduinoHomeIfNecessary(Project project) {
+            if (project.hasProperty("arduinoHome") && project.arduinoHome) {
+                File file = new File(project.arduinoHome)
+                if (file.isAbsolute()) {
+                    return file
+                }
+                return new File(project.rootProject.projectDir, project.arduinoHome)
+            }
+
+            def candidates = arduinoHomeSearchPaths().collect {
+                def tree = project.fileTree(project.rootProject.projectDir)
+                return tree.include(it)
+            }.collect { it.files }.flatten().unique().sort()
+
+            if (candidates.size() == 1) {
+                return candidates[0].parent
+            }
+            else if (candidates.size() > 1) {
+                println candidates
+            }
+
+            return null
+        }
+
         @ComponentType
         public static void registerArduinoComponent(TypeBuilder<ArduinoComponentSpec> builder) {
         }
@@ -262,9 +271,9 @@ class ArduinoPlugin implements Plugin<Project> {
         }
 
         @BinaryTasks
-        public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoBinarySpec binary) {
+        public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ArduinoBinarySpec binary) {
             def taskNameFriendlyBoardName = "-" + binary.board.replace(":", "-")
-            def builder = ArduinoPlugin.createBuildConfiguration((Project)projectId, projectId.arduinoHome, binary.libraries, binary.projectName, null, [], binary.board)
+            def builder = ArduinoPlugin.createBuildConfiguration((Project)projectId, arduinoInstallation, binary.libraries, binary.projectName, null, [], binary.board)
 
             def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
             def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
