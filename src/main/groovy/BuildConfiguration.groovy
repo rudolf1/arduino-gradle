@@ -2,6 +2,10 @@ package com.github.jlewallen.arduino;
 
 import groovy.util.logging.Slf4j
 import org.gradle.api.*
+import org.gradle.api.internal.file.FileOperations
+import org.gradle.platform.base.*
+import org.gradle.model.*
+import org.gradle.platform.base.component.*
 
 @Slf4j
 class BuildConfiguration {
@@ -16,7 +20,7 @@ class BuildConfiguration {
     String board
     boolean provideMain
     boolean wasAnythingCompiled
-    Project project
+    FileOperations fileOperations
 
     File[] getLibrariesSearchPath() {
         def paths = [
@@ -27,7 +31,7 @@ class BuildConfiguration {
             paths << this.projectLibrariesDir
         }
 
-        def runtimePlatformTree = project.fileTree(new File(this.preferences."runtime.platform.path"))
+        def runtimePlatformTree = fileOperations.fileTree(new File(this.preferences."runtime.platform.path"))
         runtimePlatformTree.visit { details ->
             if (details.file.name == 'libraries') {
                 paths << details.file
@@ -38,7 +42,7 @@ class BuildConfiguration {
         // for the feather32u4 to get the AVR SoftwareSerial it's necessary. I'm sure
         // I'll stumble upon a better way eventually.
         if (buildVariant == "feather32u4") {
-            def buildCoreTree = project.fileTree(new File(arduinoHome, "hardware/" + buildCore))
+            def buildCoreTree = fileOperations.fileTree(new File(arduinoHome, "hardware/" + buildCore))
             buildCoreTree.visit { details ->
                 if (details.file.name == 'libraries') {
                     paths << details.file
@@ -60,10 +64,11 @@ class BuildConfiguration {
         if (projectFiles.size() == 0) {
           throw new GradleException("No project files found in $projectDir")
         }
+        provideMain = anyInoOrPdeFiles(projectFiles)
         return projectFiles
     }
 
-    File[] findNonProjectFiles(boolean provideMain) {
+    File[] findNonProjectFiles() {
         def nonProjectFiles = []
         gatherSourceFiles(nonProjectFiles, new File(buildCorePath), true) {
             if (provideMain)
@@ -89,8 +94,7 @@ class BuildConfiguration {
 
     File[] getAllSourceFiles() {
         def projectFiles = findProjectFiles()
-        def provideMain = anyInoOrPdeFiles(projectFiles)
-        def nonProjectFiles = findNonProjectFiles(provideMain)
+        def nonProjectFiles = findNonProjectFiles()
         return projectFiles + nonProjectFiles
     }
 
@@ -376,6 +380,9 @@ class BuildConfiguration {
 
     File buildFile(file) {
         def objectFile = makeObjectFilePath(file)
+
+        // My gradle foo isn't good so for some reason doing a 'clean build' makes this necessary.
+        new File(objectFile.getParent()).mkdirs()
 
         if (file.lastModified() < objectFile.lastModified()) {
             return objectFile

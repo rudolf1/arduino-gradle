@@ -4,6 +4,12 @@ import org.gradle.api.*
 import org.gradle.api.plugins.*
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.incremental.*
+import org.gradle.internal.service.ServiceRegistry
+import org.gradle.api.internal.file.FileOperations
+import org.gradle.platform.base.*
+import org.gradle.model.*
+import org.gradle.platform.base.component.*
+import org.gradle.api.internal.project.ProjectIdentifier
 import java.lang.ProcessBuilder
 import com.fazecast.jSerialComm.*
 import groovy.util.logging.Slf4j
@@ -48,6 +54,25 @@ class LinkTask extends DefaultTask {
     }
 }
 
+class UploadTask extends DefaultTask {
+
+}
+
+@Managed
+interface ArduinoComponentSpec extends GeneralComponentSpec {
+    void setBoards(List<String> boards)
+    List<String> getBoards()
+
+    void setLibraries(List<String> libraries)
+    List<String> getLibraries()
+}
+
+@Managed
+interface ArduinoBinarySpec extends BinarySpec {
+    void setBoard(String board)
+    String getBoard()
+}
+
 @Slf4j
 class ArduinoPlugin implements Plugin<Project> {
     void apply(Project project) {
@@ -64,47 +89,6 @@ class ArduinoPlugin implements Plugin<Project> {
             throw new GradleException("No arduinoHome configured or available!")
         }
 
-        project.afterEvaluate {
-            def builder = createBuildConfiguration(project, project.arduino.defaultBoard)
-
-            project.tasks.create('compile', CompileTask.class, { task ->
-                task.buildConfiguration = builder
-                task.objectFiles = builder.allObjectFiles
-                task.sourceFiles = builder.allSourceFiles
-                task.sourceFiles.each { task.inputs.file(it) }
-                task.objectFiles.each { task.outputs.file(it) }
-            })
-
-            project.tasks.create('archive', ArchiveTask.class, { task ->
-                task.dependsOn('compile');
-                task.buildConfiguration = builder
-                task.objectFiles = builder.allObjectFiles
-                task.archiveFile = builder.archiveFile
-                task.objectFiles.each { task.inputs.file(it) }
-                task.outputs.file(task.archiveFile)
-            })
-
-            project.tasks.create('link', LinkTask.class, { task ->
-                task.dependsOn('archive');
-                task.buildConfiguration = builder
-                task.objectFiles = builder.allObjectFiles
-                task.archiveFile = builder.archiveFile
-                task.binary = builder.binaryFile
-            })
-        }
-
-        def BuildConfiguration lastBuild;
-
-        project.task('build', dependsOn: ['link']) << {
-        }
-
-        project.task('buildAll') << {
-            project.arduino.boards.each {
-                def builder = createBuildConfiguration(project, it)
-                builder.build()
-            }
-        }
-
         project.task("showPorts") << {
             def ports = SerialPort.getCommPorts()
             ports.each {
@@ -119,6 +103,8 @@ class ArduinoPlugin implements Plugin<Project> {
                 println it.descriptivePortName
             }
         }
+
+        def BuildConfiguration lastBuild;
 
         project.task('upload', dependsOn: 'build') << {
             if (project.port == null) {
@@ -148,14 +134,9 @@ class ArduinoPlugin implements Plugin<Project> {
             }
             process.waitFor()
         }
-
-        project.task('clean') << {
-            ant.delete(dir: project.buildDir)
-        }
-
     }
 
-    private String[] getPreferencesCommandLine(Project project, BuildConfiguration config) {
+    private static String[] getPreferencesCommandLine(Project project, BuildConfiguration config) {
         return ["${project.arduino.home}/arduino-builder",
                  "-dump-prefs",
                  "-logger=machine",
@@ -181,7 +162,7 @@ class ArduinoPlugin implements Plugin<Project> {
                  "-quiet"]
     }
 
-    private BuildConfiguration createBuildConfiguration(Project project, String board) {
+    public static BuildConfiguration createBuildConfiguration(Project project, String board) {
         def config = new BuildConfiguration()
 
         config.libraryNames = project.arduino.libraries
@@ -191,7 +172,7 @@ class ArduinoPlugin implements Plugin<Project> {
         config.provideMain = project.arduino.provideMain
         config.originalBuildDir = project.buildDir
         config.projectLibrariesDir = project.arduino.projectLibrariesDir ? new File((String)project.arduino.projectLibrariesDir) : null
-        config.project = project
+        config.fileOperations = project
         config.board = board
 
         config.buildDir.mkdirs()
@@ -254,4 +235,65 @@ class ArduinoPlugin implements Plugin<Project> {
         return null
     }
 
+    static class Rules extends RuleSource {
+        @ComponentType
+        public static void registerArduinoComponent(TypeBuilder<ArduinoComponentSpec> builder) {
+        }
+
+        @ComponentType
+        public static void registerArduinoBinary(TypeBuilder<ArduinoBinarySpec> builder) {
+        }
+
+        @ComponentBinaries
+        public static void generateBinaries(ModelMap<ArduinoBinarySpec> binaries, ServiceRegistry serviceRegistry,
+                                            ProjectIdentifier projectId, ArduinoComponentSpec component) {
+            // def fileOperations = serviceRegistry.get(FileOperations.class)
+            component.boards.each { board ->
+                binaries.create("exploded") { binary ->
+                    binary.board = board
+                }
+            }
+        }
+
+        @BinaryTasks
+        public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoBinarySpec binary) {
+            def taskNameFriendlyBoardName = binary.board.replace(":", "-")
+            def builder = ArduinoPlugin.createBuildConfiguration((Project)projectId, binary.board)
+
+            def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
+            def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
+            def linkTaskName = binary.tasks.taskName("link", taskNameFriendlyBoardName)
+            def uploadTaskName = binary.tasks.taskName("upload", taskNameFriendlyBoardName)
+
+            tasks.create(compileTaskName, CompileTask.class, { task ->
+                task.buildConfiguration = builder
+                task.objectFiles = builder.allObjectFiles
+                task.sourceFiles = builder.allSourceFiles
+                task.sourceFiles.each { task.inputs.file(it) }
+                task.objectFiles.each { task.outputs.file(it) }
+            })
+
+            tasks.create(archiveTaskName, ArchiveTask.class, { task ->
+                task.dependsOn(compileTaskName);
+                task.buildConfiguration = builder
+                task.objectFiles = builder.allObjectFiles
+                task.archiveFile = builder.archiveFile
+                task.objectFiles.each { task.inputs.file(it) }
+                task.outputs.file(task.archiveFile)
+            })
+
+            tasks.create(linkTaskName, LinkTask.class, { task ->
+                task.dependsOn(archiveTaskName);
+                task.buildConfiguration = builder
+                task.objectFiles = builder.allObjectFiles
+                task.archiveFile = builder.archiveFile
+                task.binary = builder.binaryFile
+            })
+
+            tasks.create(uploadTaskName, UploadTask.class, { task ->
+                task.dependsOn(linkTaskName);
+
+            })
+        }
+    }
 }
