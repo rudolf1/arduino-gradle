@@ -55,7 +55,37 @@ class LinkTask extends DefaultTask {
 }
 
 class UploadTask extends DefaultTask {
+    String port
 
+    @TaskAction
+    void execute(IncrementalTaskInputs inputs) {
+        if (port == null) {
+            throw new GradleException("Please provide a Serial Port")
+        }
+
+        def String specifiedPort = port
+        def newPort = Uploader.discoverPort(specifiedPort, lastBuild.use1200BpsTouch)
+        if (!newPort)  {
+            throw new GradleException("No port")
+        }
+
+        def uploadCommand = lastBuild.getUploadCommand(newPort)
+        def parsed = CommandLine.translateCommandLine(uploadCommand)
+        logger.debug(uploadCommand)
+        println(uploadCommand)
+
+        def processBuilder = new ProcessBuilder(parsed)
+        processBuilder.redirectErrorStream(true)
+        processBuilder.directory(project.projectDir)
+        def process = processBuilder.start()
+        def InputStream so = process.getInputStream()
+        def BufferedReader reader = new BufferedReader(new InputStreamReader(so))
+        def line
+        while ((line = reader.readLine()) != null) {
+            System.out.println(line)
+        }
+        process.waitFor()
+    }
 }
 
 @Managed
@@ -69,6 +99,12 @@ interface ArduinoComponentSpec extends GeneralComponentSpec {
 
 @Managed
 interface ArduinoBinarySpec extends BinarySpec {
+    void setProjectName(String name)
+    String getProjectName()
+
+    void setLibraries(List<String> libraries)
+    List<String> getLibraries()
+
     void setBoard(String board)
     String getBoard()
 }
@@ -95,83 +131,51 @@ class ArduinoPlugin implements Plugin<Project> {
                 println it.descriptivePortName
             }
         }
-
-        project.task("showPossiblePorts") << {
-            def builder = createBuildConfiguration(project, project.arduino.defaultBoard)
-            def ports = SerialPort.getCommPorts().findAll { it.descriptivePortName.contains builder.usbProduct }
-            ports.each {
-                println it.descriptivePortName
-            }
-        }
-
-        def BuildConfiguration lastBuild;
-
-        project.task('upload', dependsOn: 'build') << {
-            if (project.port == null) {
-                throw new GradleException("Please provide a Serial Port")
-            }
-
-            def String specifiedPort = project.port
-            def newPort = Uploader.discoverPort(specifiedPort, lastBuild.use1200BpsTouch)
-            if (!newPort)  {
-                throw new GradleException("No port")
-            }
-
-            def uploadCommand = lastBuild.getUploadCommand(newPort)
-            def parsed = CommandLine.translateCommandLine(uploadCommand)
-            logger.debug(uploadCommand)
-            println(uploadCommand)
-
-            def processBuilder = new ProcessBuilder(parsed)
-            processBuilder.redirectErrorStream(true)
-            processBuilder.directory(project.projectDir)
-            def process = processBuilder.start()
-            def InputStream so = process.getInputStream()
-            def BufferedReader reader = new BufferedReader(new InputStreamReader(so))
-            def line
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line)
-            }
-            process.waitFor()
-        }
     }
 
     private static String[] getPreferencesCommandLine(Project project, BuildConfiguration config) {
-        return ["${project.arduino.home}/arduino-builder",
-                 "-dump-prefs",
-                 "-logger=machine",
-                 "-hardware",
-                 "${project.arduino.home}/hardware",
-                 "-hardware",
-                 "${project.arduino.arduinoPackagesDir}/packages",
-                 "-tools",
-                 "${project.arduino.home}/tools-builder",
-                 "-tools",
-                 "${project.arduino.home}/hardware/tools/avr",
-                 "-tools",
-                 "${project.arduino.arduinoPackagesDir}/packages",
-                 "-built-in-libraries",
-                 "${project.arduino.home}/libraries",
-                 "-libraries",
-                 "${project.arduino.projectLibrariesDir}",
-                 "-fqbn=${config.board}",
-                 "-ide-version=10609",
-                 "-build-path",
-                 "${config.buildDir}",
-                 "-warnings=none",
-                 "-quiet"]
+        List<String> parts = []
+        parts.addAll(["${project.arduino.home}/arduino-builder",
+                      "-dump-prefs",
+                      "-logger=machine",
+                      "-hardware",
+                      "${project.arduino.home}/hardware",
+                      "-hardware",
+                      "${project.arduino.arduinoPackagesDir}/packages",
+                      "-tools",
+                      "${project.arduino.home}/tools-builder",
+                      "-tools",
+                      "${project.arduino.home}/hardware/tools/avr",
+                      "-tools",
+                      "${project.arduino.arduinoPackagesDir}/packages",
+                      "-built-in-libraries",
+                      "${project.arduino.home}/libraries"])
+
+        if (project.arduino.projectLibrariesDir) {
+            parts.add("-libraries")
+            parts.add("${project.arduino.projectLibrariesDir}")
+        }
+
+        parts.addAll(["-fqbn=${config.board}",
+                      "-ide-version=10609",
+                      "-build-path",
+                      "${config.buildDir}",
+                      "-warnings=none",
+                      "-quiet"])
+        return parts.toArray()
     }
 
-    public static BuildConfiguration createBuildConfiguration(Project project, String board) {
+    public static BuildConfiguration createBuildConfiguration(Project project, String arduinoHome, List<String> libraryNames,
+                                                              String projectName, String projectLibrariesDir, List<String> preprocessorDefines,
+                                                              String board) {
         def config = new BuildConfiguration()
 
-        config.libraryNames = project.arduino.libraries
-        config.projectName = project.arduino.projectName
-        config.arduinoHome = project.arduino.home
+        config.libraryNames = libraryNames
+        config.projectName = projectName
+        config.arduinoHome = arduinoHome
         config.projectDir = project.projectDir
-        config.provideMain = project.arduino.provideMain
         config.originalBuildDir = project.buildDir
-        config.projectLibrariesDir = project.arduino.projectLibrariesDir ? new File((String)project.arduino.projectLibrariesDir) : null
+        config.projectLibrariesDir = projectLibrariesDir ? new File((String)projectLibrariesDir) : null
         config.fileOperations = project
         config.board = board
 
@@ -187,7 +191,7 @@ class ArduinoPlugin implements Plugin<Project> {
         def preferences = new Properties()
         preferences.load(new StringReader(data.replace("\\", "\\\\")))
 
-        def extraFlags = project.arduino.preprocessorDefines.collect { "-D" + it }.join(" ")
+        def extraFlags = preprocessorDefines.collect { "-D" + it }.join(" ")
         preferences["compiler.c.extra_flags"] += " " + extraFlags
         preferences["compiler.cpp.extra_flags"] += " " + extraFlags
 
@@ -251,14 +255,16 @@ class ArduinoPlugin implements Plugin<Project> {
             component.boards.each { board ->
                 binaries.create("exploded") { binary ->
                     binary.board = board
+                    binary.libraries = component.libraries
+                    binary.projectName = component.name
                 }
             }
         }
 
         @BinaryTasks
         public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoBinarySpec binary) {
-            def taskNameFriendlyBoardName = binary.board.replace(":", "-")
-            def builder = ArduinoPlugin.createBuildConfiguration((Project)projectId, binary.board)
+            def taskNameFriendlyBoardName = "-" + binary.board.replace(":", "-")
+            def builder = ArduinoPlugin.createBuildConfiguration((Project)projectId, projectId.arduinoHome, binary.libraries, binary.projectName, null, [], binary.board)
 
             def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
             def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
@@ -290,10 +296,11 @@ class ArduinoPlugin implements Plugin<Project> {
                 task.binary = builder.binaryFile
             })
 
-            tasks.create(uploadTaskName, UploadTask.class, { task ->
-                task.dependsOn(linkTaskName);
-
-            })
+            if (false) {
+                tasks.create(uploadTaskName, UploadTask.class, { task ->
+                    task.dependsOn(linkTaskName);
+                })
+            }
         }
     }
 }
