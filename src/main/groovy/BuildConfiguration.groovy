@@ -53,49 +53,95 @@ class BuildConfiguration {
         return new File(originalBuildDir, pathFriendlyBoardName)
     }
 
-    void build() {
-        log.lifecycle("Building for ${board}")
-
+    File[] findProjectFiles() {
         def projectFiles = []
         gatherSourceFiles(projectFiles, projectDir, false)
 
         if (projectFiles.size() == 0) {
           throw new GradleException("No project files found in $projectDir")
         }
+        return projectFiles
+    }
 
-        provideMain = anyInoOrPdeFiles(projectFiles)
-
-        def arduinoFiles = []
-        gatherSourceFiles(arduinoFiles, new File(buildCorePath), true) {
-            if (provideMain) return true
+    File[] findNonProjectFiles(boolean provideMain) {
+        def nonProjectFiles = []
+        gatherSourceFiles(nonProjectFiles, new File(buildCorePath), true) {
+            if (provideMain)
+                return true
             return !(it.name =~ /main.(c|cpp)/)
         }
 
-        gatherSourceFiles(arduinoFiles, new File(buildVariantPath))
+        gatherSourceFiles(nonProjectFiles, new File(buildVariantPath))
         this.getLibraryPaths().each { path ->
-            gatherSourceFiles(arduinoFiles, path)  
+            gatherSourceFiles(nonProjectFiles, path)
         }
+        return nonProjectFiles
+    }
+
+    File getArchiveFile() {
+        return new File(buildDir, "core.a")
+    }
+
+    File[] getAllObjectFiles() {
+        def sourceFiles = getAllSourceFiles()
+        return sourceFiles.collect { makeObjectFilePath(it) }
+    }
+
+    File[] getAllSourceFiles() {
+        def projectFiles = findProjectFiles()
+        def provideMain = anyInoOrPdeFiles(projectFiles)
+        def nonProjectFiles = findNonProjectFiles(provideMain)
+        return projectFiles + nonProjectFiles
+    }
+
+    File getBinaryFile() {
+        Properties props = new Properties()
+        props["build.project_name"] = projectName
+        props.putAll(preferences)
+        if (isAvrDude()) {
+            return new File(getKey(props, "{build.path}/{build.project_name}.hex"))
+        }
+        throw new GradleException("getBinaryFile")
+    }
+
+    File linkArchive(File[] objectFiles, File archive) {
+        objectFiles.each {
+            def String archiveCommand = getArCommand(it, archive.name)
+            log.debug(archiveCommand)
+            execute(archiveCommand)
+        }
+        return archive
+    }
+
+    File linkBinary(File[] objectFiles, File archive)  {
+        def String linkCommand = getLinkCommand(objectFiles, archive.name)
+        log.debug(linkCommand)
+        execute(linkCommand)
+
+        getObjCopyCommands().each {
+            log.debug(it)
+            execute(it)
+        }
+        return binaryFile
+    }
+
+    void build() {
+        log.lifecycle("Building for ${board}")
+
+        def projectFiles = findProjectFiles()
+        def provideMain = anyInoOrPdeFiles(projectFiles)
+
+        def nonProjectFiles = findNonProjectFiles(provideMain)
 
         def projectObjectFiles = projectFiles.collect { buildFile(it) }
-        def arduinoObjectFiles = arduinoFiles.collect { buildFile(it) }
+        def nonProjectObjectFiles = nonProjectFiles.collect { buildFile(it) }
 
         if (wasAnythingCompiled) {
             log.lifecycle("Archiving")
-            arduinoObjectFiles.each {
-                def String archiveCommand = getArCommand(it, "core.a")
-                log.debug(archiveCommand)
-                execute(archiveCommand)
-            }
+            linkArchive(nonProjectObjectFiles, getArchiveFile())
 
             log.lifecycle("Linking")
-            def String linkCommand = getLinkCommand(projectObjectFiles, "core.a")
-            log.debug(linkCommand)
-            execute(linkCommand)
-
-            getObjCopyCommands().each {
-                log.debug(it)
-                execute(it)
-            }
+            linkBinary(projectObjectFiles, getArchiveFile())
         }
     }
 
@@ -205,7 +251,7 @@ class BuildConfiguration {
 
     File[] getLibraryPaths() {
         def libraryPaths = []
-        this.libraryNames.each { library -> 
+        this.libraryNames.each { library ->
             log.info("Searching for $library...")
             def boolean found = false
             this.getLibrariesSearchPath().each { librariesDir ->
@@ -324,8 +370,12 @@ class BuildConfiguration {
                dir.absolutePath.contains(File.separator + "test")
     }
 
-    private File buildFile(file) {
-        def objectFile = new File(buildDir, file.name + ".o")
+    File makeObjectFilePath(File file) {
+        return new File(buildDir, file.name + ".o")
+    }
+
+    File buildFile(file) {
+        def objectFile = makeObjectFilePath(file)
 
         if (file.lastModified() < objectFile.lastModified()) {
             return objectFile

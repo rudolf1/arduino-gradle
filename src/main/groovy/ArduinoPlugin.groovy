@@ -2,9 +2,51 @@ package com.github.jlewallen.arduino;
 
 import org.gradle.api.*
 import org.gradle.api.plugins.*
+import org.gradle.api.tasks.*
+import org.gradle.api.tasks.incremental.*
 import java.lang.ProcessBuilder
 import com.fazecast.jSerialComm.*
 import groovy.util.logging.Slf4j
+
+class CompileTask extends DefaultTask {
+    BuildConfiguration buildConfiguration
+    File[] sourceFiles
+    File[] objectFiles
+
+    @TaskAction
+    void execute(IncrementalTaskInputs inputs) {
+        inputs.outOfDate { change ->
+            buildConfiguration.buildFile(change.file)
+        }
+
+        inputs.removed { change ->
+            buildConfiguration.buildFile(change.file)
+        }
+    }
+}
+
+class ArchiveTask extends DefaultTask {
+    BuildConfiguration buildConfiguration
+    File[] objectFiles
+    File archiveFile
+
+    @TaskAction
+    void execute(IncrementalTaskInputs inputs) {
+        buildConfiguration.linkArchive(objectFiles, archiveFile)
+    }
+}
+
+class LinkTask extends DefaultTask {
+    BuildConfiguration buildConfiguration
+    File[] objectFiles
+    File archiveFile
+    File binary
+
+    @TaskAction
+    void execute(IncrementalTaskInputs inputs) {
+        buildConfiguration.linkBinary(objectFiles, archiveFile)
+    }
+}
 
 @Slf4j
 class ArduinoPlugin implements Plugin<Project> {
@@ -12,6 +54,9 @@ class ArduinoPlugin implements Plugin<Project> {
         project.extensions.create("arduino", ArduinoPluginExtension)
 
         project.arduino.home = guessArduinoHomeIfNecessary(project)
+        if (project.arduino.home == null) {
+            throw new GradleException("No ArduinoHome!");
+        }
         project.arduino.arduinoPackagesDir = guessArduinoPackagesDirectoryIfNecessary(project)
 
         if (!project.arduino.home) {
@@ -19,11 +64,38 @@ class ArduinoPlugin implements Plugin<Project> {
             throw new GradleException("No arduinoHome configured or available!")
         }
 
+        project.afterEvaluate {
+            def builder = createBuildConfiguration(project, project.arduino.defaultBoard)
+
+            project.tasks.create('compile', CompileTask.class, { task ->
+                task.buildConfiguration = builder
+                task.objectFiles = builder.allObjectFiles
+                task.sourceFiles = builder.allSourceFiles
+                task.sourceFiles.each { task.inputs.file(it) }
+                task.objectFiles.each { task.outputs.file(it) }
+            })
+
+            project.tasks.create('archive', ArchiveTask.class, { task ->
+                task.dependsOn('compile');
+                task.buildConfiguration = builder
+                task.objectFiles = builder.allObjectFiles
+                task.archiveFile = builder.archiveFile
+                task.objectFiles.each { task.inputs.file(it) }
+                task.outputs.file(task.archiveFile)
+            })
+
+            project.tasks.create('link', LinkTask.class, { task ->
+                task.dependsOn('archive');
+                task.buildConfiguration = builder
+                task.objectFiles = builder.allObjectFiles
+                task.archiveFile = builder.archiveFile
+                task.binary = builder.binaryFile
+            })
+        }
+
         def BuildConfiguration lastBuild;
 
-        project.task('build', dependsOn: []) << {
-            def builder = lastBuild = createBuildConfiguration(project, project.arduino.defaultBoard)
-            builder.build()
+        project.task('build', dependsOn: ['link']) << {
         }
 
         project.task('buildAll') << {
@@ -56,7 +128,7 @@ class ArduinoPlugin implements Plugin<Project> {
             def String specifiedPort = project.port
             def newPort = Uploader.discoverPort(specifiedPort, lastBuild.use1200BpsTouch)
             if (!newPort)  {
-                throw new GradleException("No port") 
+                throw new GradleException("No port")
             }
 
             def uploadCommand = lastBuild.getUploadCommand(newPort)
@@ -118,7 +190,7 @@ class ArduinoPlugin implements Plugin<Project> {
         config.projectDir = project.projectDir
         config.provideMain = project.arduino.provideMain
         config.originalBuildDir = project.buildDir
-        config.projectLibrariesDir = new File(project.arduino.projectLibrariesDir)
+        config.projectLibrariesDir = project.arduino.projectLibrariesDir ? new File((String)project.arduino.projectLibrariesDir) : null
         config.project = project
         config.board = board
 
@@ -155,7 +227,7 @@ class ArduinoPlugin implements Plugin<Project> {
             return project.arduino.arduinoPackagesDir
         }
 
-        return new File(new File(project.arduino.home).parent, "arduino-packages")
+        return new File(new File((String)project.arduino.home).parent, "arduino-packages")
     }
 
     private String guessArduinoHomeIfNecessary(Project project) {
