@@ -1,0 +1,13 @@
+package com.github.jlewallen.arduino;
+
+import org.gradle.model.Managed
+import org.gradle.platform.base.GeneralComponentSpec
+
+@Managed
+interface ArduinoComponentSpec extends GeneralComponentSpec {
+    void setBoards(List<String> boards)
+    List<String> getBoards()
+
+    void setLibraries(List<String> libraries)
+    List<String> getLibraries()
+}
