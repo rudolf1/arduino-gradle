@@ -142,7 +142,7 @@ class ArduinoPlugin implements Plugin<Project> {
             }
         }
 
-        private static String[] getPreferencesCommandLine(ArduinoInstallation installation, BuildConfiguration config) {
+        private static String[] getPreferencesCommandLine(ArduinoInstallation installation, String projectLibrariesDir, String board, File buildDir) {
             List<String> parts = ["${installation.home}/arduino-builder",
                                 "-dump-prefs",
                                 "-logger=machine",
@@ -159,15 +159,15 @@ class ArduinoPlugin implements Plugin<Project> {
                                 "-built-in-libraries",
                                 "${installation.home}/libraries"]
 
-            if (config.projectLibrariesDir) {
+            if (projectLibrariesDir) {
                 parts.add("-libraries")
-                parts.add("${config.projectLibrariesDir}")
+                parts.add(projectLibrariesDir)
             }
 
-            parts.addAll(["-fqbn=${config.board}",
+            parts.addAll(["-fqbn=${board}",
                         "-ide-version=10609",
                         "-build-path",
-                        "${config.buildDir}",
+                        "${buildDir}",
                         "-warnings=none",
                         "-quiet"])
             return parts.toArray()
@@ -176,6 +176,23 @@ class ArduinoPlugin implements Plugin<Project> {
         private static BuildConfiguration createBuildConfiguration(Project project, ArduinoInstallation installation, List<String> libraryNames,
                                                                    String projectName, String projectLibrariesDir, List<String> preprocessorDefines,
                                                                    String board) {
+            def String pathFriendlyBoardName = board.replace(":", "-")
+            def File buildDir =new File(project.buildDir, pathFriendlyBoardName)
+            def preferencesCommand = getPreferencesCommandLine(installation, projectLibrariesDir, board, buildDir)
+            def String data = RunCommand.run(preferencesCommand, project.projectDir)
+
+            /*
+            def friendlyName = config.pathFriendlyBoardName
+            def localCopy = new File(project.buildDir, "arduino.${friendlyName}.prefs")
+            localCopy.write(data)
+            */
+            def preferences = new Properties()
+            preferences.load(new StringReader(data.replace("\\", "\\\\")))
+
+            def extraFlags = preprocessorDefines.collect { "-D" + it }.join(" ")
+            preferences["compiler.c.extra_flags"] += " " + extraFlags
+            preferences["compiler.cpp.extra_flags"] += " " + extraFlags
+
             def config = new BuildConfiguration()
 
             config.libraryNames = libraryNames
@@ -186,24 +203,9 @@ class ArduinoPlugin implements Plugin<Project> {
             config.projectLibrariesDir = projectLibrariesDir ? new File((String)projectLibrariesDir) : null
             config.fileOperations = project
             config.board = board
-
-            config.buildDir.mkdirs()
-
-            def preferencesCommand = getPreferencesCommandLine(installation, config)
-            def String data = RunCommand.run(preferencesCommand, project.projectDir)
-
-            def friendlyName = config.pathFriendlyBoardName
-            def localCopy = new File(project.buildDir, "arduino.${friendlyName}.prefs")
-            localCopy.write(data)
-
-            def preferences = new Properties()
-            preferences.load(new StringReader(data.replace("\\", "\\\\")))
-
-            def extraFlags = preprocessorDefines.collect { "-D" + it }.join(" ")
-            preferences["compiler.c.extra_flags"] += " " + extraFlags
-            preferences["compiler.cpp.extra_flags"] += " " + extraFlags
-
             config.preferences = preferences
+            config.buildDir = buildDir
+            config.buildDir.mkdirs()
 
             return config
         }

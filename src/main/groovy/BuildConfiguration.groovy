@@ -17,6 +17,7 @@ class BuildConfiguration {
     File projectDir
     File originalBuildDir
     File projectLibrariesDir
+    File buildDir
     String board
     boolean provideMain
     boolean wasAnythingCompiled
@@ -51,10 +52,6 @@ class BuildConfiguration {
         }
 
         return paths;
-    }
-
-    File getBuildDir() {
-        return new File(originalBuildDir, pathFriendlyBoardName)
     }
 
     File[] findProjectFiles() {
@@ -328,10 +325,6 @@ class BuildConfiguration {
         props["serial.port"] = serial
         props["build.project_name"] = projectName
         return getKey(props, "tools.avrdude.upload.pattern")
-    }
-
-    String getPathFriendlyBoardName() {
-        return board.replace(":", "-")
     }
 
     boolean anyInoOrPdeFiles(files) {
