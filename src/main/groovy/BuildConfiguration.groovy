@@ -86,7 +86,7 @@ class BuildConfiguration {
 
     File[] getAllObjectFiles() {
         def sourceFiles = getAllSourceFiles()
-        return sourceFiles.collect { makeObjectFilePath(it) }
+        return sourceFiles.collect { makeObjectFilePath(it) }.unique()
     }
 
     File[] getAllSourceFiles() {
