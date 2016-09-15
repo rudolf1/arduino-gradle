@@ -90,7 +90,6 @@ class ArduinoPlugin implements Plugin<Project> {
         @ComponentBinaries
         public static void generateBinaries(ModelMap<ArduinoBinarySpec> binaries, ServiceRegistry serviceRegistry,
                                             ProjectIdentifier projectId, ArduinoComponentSpec component) {
-            // def fileOperations = serviceRegistry.get(FileOperations.class)
             component.boards.each { board ->
                 binaries.create("exploded") { binary ->
                     binary.board = board
@@ -100,10 +99,24 @@ class ArduinoPlugin implements Plugin<Project> {
             }
         }
 
+        private static String guessProjectLibrariesDirectory(Project project) {
+            println project
+            def File dir = project.buildDir
+            while (dir != null) {
+                def File libs = new File(dir, "libraries")
+                if (libs.isDirectory()) {
+                    return libs
+                }
+                dir = dir.getParentFile()
+            }
+            return null;
+        }
+
         @BinaryTasks
         public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ArduinoBinarySpec binary) {
             def taskNameFriendlyBoardName = "-" + binary.board.replace(":", "-")
-            def builder = createBuildConfiguration((Project)projectId, arduinoInstallation, binary.libraries, binary.projectName, null, [], binary.board)
+            def project = (Project)projectId
+            def builder = createBuildConfiguration(project, arduinoInstallation, binary.libraries, binary.projectName, guessProjectLibrariesDirectory(project), [], binary.board)
 
             def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
             def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
@@ -177,7 +190,9 @@ class ArduinoPlugin implements Plugin<Project> {
                                                                    String projectName, String projectLibrariesDir, List<String> preprocessorDefines,
                                                                    String board) {
             def String pathFriendlyBoardName = board.replace(":", "-")
-            def File buildDir =new File(project.buildDir, pathFriendlyBoardName)
+            def File buildDir = new File(project.buildDir, pathFriendlyBoardName)
+            buildDir.mkdirs();
+
             def preferencesCommand = getPreferencesCommandLine(installation, projectLibrariesDir, board, buildDir)
             def String data = RunCommand.run(preferencesCommand, project.projectDir)
 
