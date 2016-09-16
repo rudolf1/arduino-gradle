@@ -126,6 +126,7 @@ class ArduinoPlugin implements Plugin<Project> {
                     def uploadTaskName = "upload" + taskNameFriendlyBoardName
 
                     tasks.create(uploadTaskName, UploadTask.class, { task ->
+                        task.outputs.upToDateWhen { false }
                         if (project.hasProperty("port")) {
                             task.port = project.port
                         }
