@@ -114,6 +114,34 @@ class ArduinoPlugin implements Plugin<Project> {
             return null;
         }
 
+        @Mutate
+        public static void createUploadTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ModelMap<ArduinoComponentSpec> components) {
+            def project = (Project)projectId
+            def names = []
+
+            components.each { component ->
+                component.boards.each { board ->
+                    def taskNameFriendlyBoardName = "-" + board.replace(":", "-")
+                    def builder = createBuildConfiguration(project, arduinoInstallation, [], component.name, null, [], board)
+                    def uploadTaskName = "upload" + taskNameFriendlyBoardName
+
+                    tasks.create(uploadTaskName, UploadTask.class, { task ->
+                        if (project.hasProperty("port")) {
+                            task.port = project.port
+                        }
+                        task.buildConfiguration = builder
+                        task.dependsOn("build")
+                    })
+
+                    names << uploadTaskName
+                }
+            }
+
+            tasks.create("upload", DefaultTask.class, { top ->
+                names.each { top.dependsOn(it) }
+            })
+        }
+
         @BinaryTasks
         public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ArduinoBinarySpec binary) {
             def taskNameFriendlyBoardName = "-" + binary.board.replace(":", "-")
@@ -123,7 +151,6 @@ class ArduinoPlugin implements Plugin<Project> {
             def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
             def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
             def linkTaskName = binary.tasks.taskName("link", taskNameFriendlyBoardName)
-            def uploadTaskName = binary.tasks.taskName("upload", taskNameFriendlyBoardName)
 
             tasks.create(compileTaskName, CompileTask.class, { task ->
                 task.buildConfiguration = builder
@@ -149,12 +176,6 @@ class ArduinoPlugin implements Plugin<Project> {
                 task.archiveFile = builder.archiveFile
                 task.binary = builder.binaryFile
             })
-
-            if (false) {
-                tasks.create(uploadTaskName, UploadTask.class, { task ->
-                    task.dependsOn(linkTaskName);
-                })
-            }
         }
 
         private static String[] getPreferencesCommandLine(ArduinoInstallation installation, String projectLibrariesDir, String board, File buildDir) {

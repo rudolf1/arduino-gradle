@@ -6,6 +6,7 @@ import org.gradle.api.tasks.*
 import org.gradle.api.tasks.incremental.*
 
 class UploadTask extends DefaultTask {
+    BuildConfiguration buildConfiguration
     String port
 
     @TaskAction
@@ -15,12 +16,12 @@ class UploadTask extends DefaultTask {
         }
 
         def String specifiedPort = port
-        def newPort = Uploader.discoverPort(specifiedPort, lastBuild.use1200BpsTouch)
+        def newPort = Uploader.discoverPort(specifiedPort, buildConfiguration.use1200BpsTouch)
         if (!newPort)  {
             throw new GradleException("No port")
         }
 
-        def uploadCommand = lastBuild.getUploadCommand(newPort)
+        def uploadCommand = buildConfiguration.getUploadCommand(newPort)
         def parsed = CommandLine.translateCommandLine(uploadCommand)
         logger.debug(uploadCommand)
         println(uploadCommand)

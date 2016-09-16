@@ -1,3 +1,14 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.3'
+    }
+}
+
+apply plugin: 'com.github.johnrengelman.shadow'
+
 apply plugin: 'groovy'
 apply plugin: 'maven'
 
@@ -8,10 +19,22 @@ repositories {
 group = 'com.github.jlewallen.arduino'
 version = '1.0'
 
+shadowJar {
+   classifier = null
+   configurations = [project.configurations.compile]
+   dependencies {
+       include(dependency('com.fazecast:jSerialComm:1.3.11'))
+   }
+}
+
+artifacts {
+    archives shadowJar
+}
+
 uploadArchives {
-  repositories {
-    mavenLocal()
-  }
+    repositories {
+        mavenLocal()
+    }
 }
 
 dependencies {
@@ -19,4 +42,3 @@ dependencies {
     compile localGroovy()
     compile 'com.fazecast:jSerialComm:1.3.11'
 }
-
