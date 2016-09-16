@@ -36,7 +36,7 @@ class Uploader {
 
     static String discoverPort(String specifiedPort, boolean perform1200bpsTouch) {
         def newPort = specifiedPort
-        def serialPort = SerialPort.getCommPort(specifiedPort)
+        def serialPort = specifiedPort ? SerialPort.getCommPort(specifiedPort) : null
         if (perform1200bpsTouch) {
             newPort = Uploader.perform1200bpsTouch(specifiedPort)
         }
