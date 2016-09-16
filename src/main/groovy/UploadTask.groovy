@@ -11,10 +11,6 @@ class UploadTask extends DefaultTask {
 
     @TaskAction
     void execute(IncrementalTaskInputs inputs) {
-        if (port == null) {
-            throw new GradleException("Please provide a Serial Port")
-        }
-
         def String specifiedPort = port
         def newPort = Uploader.discoverPort(specifiedPort, buildConfiguration.use1200BpsTouch)
         if (!newPort)  {
