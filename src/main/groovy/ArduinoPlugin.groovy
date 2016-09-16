@@ -64,16 +64,18 @@ class ArduinoPlugin implements Plugin<Project> {
                 return new File(project.rootProject.projectDir, project.arduinoHome)
             }
 
-            def candidates = arduinoHomeSearchPaths().collect {
-                def tree = project.fileTree(project.rootProject.projectDir)
-                return tree.include(it)
-            }.collect { it.files }.flatten().unique().sort()
+            def File dir = new File(System.getProperty("user.dir"))
+            while (dir != null) {
+                def tree = project.fileTree(dir)
+                def found = tree.include("arduino-*/arduino-builder*").files.unique().sort()
+                if (found.size() == 1) {
+                    return found[0].parent
+                }
+                else if (found.size() > 1) {
+                    println found
+                }
 
-            if (candidates.size() == 1) {
-                return candidates[0].parent
-            }
-            else if (candidates.size() > 1) {
-                println candidates
+                dir = dir.getParentFile()
             }
 
             return null
