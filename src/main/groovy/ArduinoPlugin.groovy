@@ -65,17 +65,22 @@ class ArduinoPlugin implements Plugin<Project> {
             }
 
             def File dir = new File(System.getProperty("user.dir"))
-            while (dir != null) {
-                def tree = project.fileTree(dir)
-                def found = tree.include("arduino-*/arduino-builder*").files.unique().sort()
-                if (found.size() == 1) {
-                    return found[0].parent
-                }
-                else if (found.size() > 1) {
-                    println found
-                }
+            try {
+                while (dir != null) {
+                    def tree = project.fileTree(dir)
+                    def found = tree.include("arduino-*/arduino-builder*").files.unique().sort()
+                    if (found.size() == 1) {
+                        return found[0].parent
+                    }
+                    else if (found.size() > 1) {
+                        println found
+                    }
 
-                dir = dir.getParentFile()
+                    dir = dir.getParentFile()
+                }
+            }
+            catch (Exception e) {
+                log.error("Unable to locate ArduinoHome", e)
             }
 
             return null
