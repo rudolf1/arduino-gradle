@@ -112,6 +112,7 @@ class ArduinoPlugin implements Plugin<Project> {
             while (dir != null) {
                 def File libs = new File(dir, "libraries")
                 if (libs.isDirectory()) {
+                    log.info("Using ${libs}")
                     return libs
                 }
                 dir = dir.getParentFile()
@@ -162,6 +163,7 @@ class ArduinoPlugin implements Plugin<Project> {
                 task.buildConfiguration = builder
                 task.objectFiles = builder.allObjectFiles
                 task.sourceFiles = builder.allSourceFiles
+
                 task.sourceFiles.each { task.inputs.file(it) }
                 task.objectFiles.each { task.outputs.file(it) }
             })
@@ -171,6 +173,7 @@ class ArduinoPlugin implements Plugin<Project> {
                 task.buildConfiguration = builder
                 task.objectFiles = builder.allObjectFiles
                 task.archiveFile = builder.archiveFile
+
                 task.objectFiles.each { task.inputs.file(it) }
                 task.outputs.file(task.archiveFile)
             })
@@ -181,6 +184,10 @@ class ArduinoPlugin implements Plugin<Project> {
                 task.objectFiles = builder.allObjectFiles
                 task.archiveFile = builder.archiveFile
                 task.binary = builder.binaryFile
+
+                task.objectFiles.each { task.inputs.file(it) }
+                task.inputs.file(task.archiveFile)
+                task.outputs.file(task.binary)
             })
         }
 
