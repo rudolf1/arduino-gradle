@@ -102,7 +102,10 @@ class BuildConfiguration {
         if (isAvrDude()) {
             return new File(getKey(props, "{build.path}/{build.project_name}.hex"))
         }
-        throw new GradleException("getBinaryFile")
+        if (isBossac()) {
+            return new File(getKey(props, "{build.path}/{build.project_name}.bin"))
+        }
+        throw new GradleException("Unable to get binary file")
     }
 
     File linkArchive(File[] objectFiles, File archive) {

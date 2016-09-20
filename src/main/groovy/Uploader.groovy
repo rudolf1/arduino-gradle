@@ -18,12 +18,15 @@ class Uploader {
         while (tries-- > 0) {
             sleep(500)
             def portNamesNow = portNames
+            def missingPorts = (portNamesBefore - portNamesNow)
             def newPorts = (portNamesNow - portNamesBefore)
 
             print portNamesBefore
             print " -> "
             print portNamesNow
             print ": "
+            print missingPorts
+            print " / "
             println newPorts
 
             if (newPorts.size() > 0) {
