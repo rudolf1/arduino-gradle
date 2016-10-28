@@ -123,13 +123,15 @@ class ArduinoPlugin implements Plugin<Project> {
         @Mutate
         public static void createUploadTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ModelMap<ArduinoComponentSpec> components) {
             def project = (Project)projectId
-            def names = []
+            def uploadTaskNames = []
+            def monitorTaskNames = []
 
             components.each { component ->
                 component.boards.each { board ->
                     def taskNameFriendlyBoardName = "-" + board.replace(":", "-")
                     def builder = createBuildConfiguration(project, arduinoInstallation, [], component.name, null, [], board)
                     def uploadTaskName = "upload" + taskNameFriendlyBoardName
+                    def monitorTaskName = "monitor" + taskNameFriendlyBoardName
 
                     tasks.create(uploadTaskName, UploadTask.class, { task ->
                         task.outputs.upToDateWhen { false }
@@ -140,12 +142,22 @@ class ArduinoPlugin implements Plugin<Project> {
                         task.dependsOn("build")
                     })
 
-                    names << uploadTaskName
+                    tasks.create(monitorTaskName, MonitorTask.class, { task ->
+                        task.uploadTask = tasks.get(uploadTaskName)
+                        task.dependsOn("upload")
+                    })
+
+                    uploadTaskNames << uploadTaskName
+                    monitorTaskNames << monitorTaskName
                 }
             }
 
             tasks.create("upload", DefaultTask.class, { top ->
-                names.each { top.dependsOn(it) }
+                uploadTaskNames.each { top.dependsOn(it) }
+            })
+
+            tasks.create("monitor", DefaultTask.class, { top ->
+                monitorTaskNames.each { top.dependsOn(it) }
             })
         }
 

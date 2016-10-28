@@ -3,7 +3,7 @@ package com.github.jlewallen.arduino;
 import com.fazecast.jSerialComm.*
 
 class Uploader {
-    static String perform1200bpsTouch(String portName) {
+    static String[] perform1200bpsTouch(String portName) {
         def serialPort = SerialPort.getCommPort(portName)
         serialPort.setBaudRate(1200)
         if (serialPort.openPort()) {
@@ -14,7 +14,19 @@ class Uploader {
         return null
     }
 
-    static String lookForNewPort(String[] portNamesBefore, tries = 10) {
+    static boolean waitForPort(String portName, tries = 10) {
+        while (tries-- > 0) {
+            sleep(500)
+            def portNames = getPortNames()
+            if (portNames.contains(portName)) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    static String[] lookForNewPort(String[] portNamesBefore, tries = 10) {
         while (tries-- > 0) {
             sleep(500)
             def portNamesNow = portNames
@@ -30,21 +42,22 @@ class Uploader {
             println newPorts
 
             if (newPorts.size() > 0) {
-                return newPorts[0]
+                return [ newPorts[0], missingPorts[0] ]
             }
         }
 
         return null
     }
 
-    static String discoverPort(String specifiedPort, boolean perform1200bpsTouch) {
+    static String[] discoverPort(String specifiedPort, boolean perform1200bpsTouch) {
         def newPort = specifiedPort
+        def ports
         def serialPort = specifiedPort ? SerialPort.getCommPort(specifiedPort) : null
         if (perform1200bpsTouch) {
-            newPort = Uploader.perform1200bpsTouch(specifiedPort)
+            ports = Uploader.perform1200bpsTouch(specifiedPort)
         }
 
-        if (newPort == null) {
+        if (ports == null) {
             println ""
             println "ERROR: Unable to find the specified port, try resetting while I look."
             println "ERROR: Press RESET and cross your fingers."
@@ -52,7 +65,7 @@ class Uploader {
             return lookForNewPort(portNames, 20)
         }
 
-        return newPort
+        return [ newPort ]
     }
 
     static String[] getPortNames() {
