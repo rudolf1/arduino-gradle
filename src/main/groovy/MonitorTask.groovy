@@ -14,7 +14,8 @@ class MonitorTask extends DefaultTask {
 
         Uploader.waitForPort(port)
 
-        def commandLine = "putty.exe -serial ${port} -sercfg 115200 -sessionlog log.txt"
+        def puttyPath = findPuttyPath()
+        def commandLine = "${puttyPath} -serial ${port} -sercfg 115200 -sessionlog log.txt"
         def parsed = CommandLine.translateCommandLine(commandLine)
         println(commandLine)
 
@@ -22,5 +23,23 @@ class MonitorTask extends DefaultTask {
         processBuilder.redirectErrorStream(true)
         processBuilder.directory(project.projectDir)
         def process = processBuilder.start()
+    }
+
+    def findPuttyPath() {
+        def puttyPaths = [
+            "./",
+            "C:/Windows/System32"
+        ]
+
+        def files = puttyPaths.collect { new File(it, "putty.exe") }
+        def found = files.findAll {
+            return it.isFile()
+        }
+        if (found.size() == 0) {
+            println files
+            throw new Exception("Unable to find putty.exe")
+        }
+
+        return found[0]
     }
 }
