@@ -14,6 +14,11 @@ class MonitorTask extends DefaultTask {
 
         Uploader.waitForPort(port)
 
+        def logFile = new File("log.txt")
+        if (logFile.isFile()) {
+            logFile.delete()
+        }
+
         def puttyPath = findPuttyPath()
         def commandLine = "${puttyPath} -serial ${port} -sercfg 115200 -sessionlog log.txt"
         def parsed = CommandLine.translateCommandLine(commandLine)
