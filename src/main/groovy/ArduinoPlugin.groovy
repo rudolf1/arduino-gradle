@@ -143,6 +143,7 @@ class ArduinoPlugin implements Plugin<Project> {
                     })
 
                     tasks.create(monitorTaskName, MonitorTask.class, { task ->
+                        task.outputs.upToDateWhen { false }
                         task.uploadTask = tasks.get(uploadTaskName)
                         task.dependsOn("upload")
                     })
