@@ -17,10 +17,12 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class ArduinoPlugin implements Plugin<Project> {
     void apply(Project project) {
-        project.task("showPorts") << {
-            def ports = SerialPort.getCommPorts()
-            ports.each {
-                println it.descriptivePortName
+        project.task("showPorts") {
+            doLast {
+                def ports = SerialPort.getCommPorts()
+                ports.each {
+                    println it.descriptivePortName
+                }
             }
         }
     }
