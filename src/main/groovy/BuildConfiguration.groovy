@@ -6,6 +6,9 @@ import org.gradle.api.internal.file.FileOperations
 import org.gradle.platform.base.*
 import org.gradle.model.*
 import org.gradle.platform.base.component.*
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import groovy.json.JsonBuilder
 
 @Slf4j
 class BuildConfiguration {
@@ -100,12 +103,45 @@ class BuildConfiguration {
         props["build.project_name"] = projectName
         props.putAll(preferences)
         if (isAvrDude()) {
-            return new File(getKey(props, "{build.path}/{build.project_name}.hex"))
+            return new File(replace(props, "{build.path}/{build.project_name}.hex"))
         }
         if (isBossac()) {
-            return new File(getKey(props, "{build.path}/{build.project_name}.bin"))
+            return new File(replace(props, "{build.path}/{build.project_name}.bin"))
         }
         throw new GradleException("Unable to get binary file")
+    }
+
+    File getMetaFile() {
+        Properties props = new Properties()
+        props["build.project_name"] = projectName
+        props.putAll(preferences)
+        return new File(replace(props, "{build.path}/{build.project_name}.json"))
+    }
+
+    File writeMetaFile() {
+        File file = getMetaFile()
+
+        def props = new Properties()
+        props.putAll(preferences)
+
+        def json = new JsonBuilder()
+        json.meta {
+            variant(getKey(props, "build.variant"))
+            project(projectName)
+            board(board)
+            time(getKey(props, "extra.time.utc"))
+            upload {
+                tool(uploadTool)
+                use1200bpsTouch this.hasKey("upload.use_1200bps_touch")
+                command this.getUploadCommandTemplate()
+            }
+        }
+
+        file.withWriter { o ->
+            o.print(JsonOutput.prettyPrint(json.toString()))
+        }
+
+        return file
     }
 
     File linkArchive(File[] objectFiles, File archive) {
@@ -126,6 +162,9 @@ class BuildConfiguration {
             log.debug(it)
             execute(it)
         }
+
+        writeMetaFile()
+
         return binaryFile
     }
 
@@ -328,6 +367,19 @@ class BuildConfiguration {
         props["serial.port"] = serial
         props["build.project_name"] = projectName
         return getKey(props, "tools.avrdude.upload.pattern")
+    }
+
+    private String getUploadCommandTemplate() {
+        Properties props = new Properties()
+        props.putAll(this.preferences)
+        props.remove("build.path")
+        if (this.isBossac()) {
+            return getKey(props, "tools.bossac.upload.pattern")
+        }
+        if (this.isAvrDude()) {
+            return getKey(props, "tools.avrdude.upload.pattern")
+        }
+        throw new GradleException("Unknown upload.tool: " + uploadTool)
     }
 
     boolean anyInoOrPdeFiles(files) {
