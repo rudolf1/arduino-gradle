@@ -53,8 +53,13 @@ class Uploader {
         def newPort = specifiedPort
         def ports
         def serialPort = specifiedPort ? SerialPort.getCommPort(specifiedPort) : null
-        if (perform1200bpsTouch) {
+        if (perform1200bpsTouch && specifiedPort) {
+            print "Given: "
+            println specifiedPort
             ports = Uploader.perform1200bpsTouch(specifiedPort)
+            if (ports == null) {
+                return [ specifiedPort, specifiedPort ]
+            }
         }
 
         if (ports == null) {
@@ -62,7 +67,11 @@ class Uploader {
             println "ERROR: Unable to find the specified port, try resetting while I look."
             println "ERROR: Press RESET and cross your fingers."
             println ""
-            return lookForNewPort(portNames, 20)
+            def found = lookForNewPort(portNames, 20)
+            if (found) {
+                return found
+            }
+            return null
         }
 
         return [ newPort ]
