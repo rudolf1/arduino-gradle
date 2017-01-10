@@ -100,7 +100,8 @@ class ArduinoPlugin implements Plugin<Project> {
         public static void generateBinaries(ModelMap<ArduinoBinarySpec> binaries, ServiceRegistry serviceRegistry,
                                             ProjectIdentifier projectId, ArduinoComponentSpec component) {
             component.boards.each { board ->
-                binaries.create("exploded") { binary ->
+                def taskNameFriendlyBoardName = "-" + board.replace(":", "-")
+                binaries.create("exploded" + taskNameFriendlyBoardName) { binary ->
                     binary.board = board
                     binary.libraries = component.libraries
                     binary.projectName = component.name
