@@ -10,4 +10,10 @@ interface ArduinoComponentSpec extends GeneralComponentSpec {
 
     void setLibraries(List<String> libraries)
     List<String> getLibraries()
+
+    String getUserCppSourcesFlags()
+    void setUserCppSourcesFlags(String flags)
+
+    String getUserCSourcesFlags()
+    void setUserCSourcesFlags(String flags)
 }

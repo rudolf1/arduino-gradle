@@ -16,6 +16,8 @@ class BuildConfiguration {
     String arduinoHome
     String projectName
     String[] libraryNames
+    String userCppSourcesFlags
+    String userCSourcesFlags
     File[] libraryPaths
     File projectDir
     File originalBuildDir
@@ -227,21 +229,27 @@ class BuildConfiguration {
         return getKey(props, "recipe.c.combine.pattern")
     }
 
-    String getCppCommand(source, object) {
+    String getCppCommand(source, object, isUserFile) {
         Properties props = new Properties()
+        props.putAll(this.preferences)
         props["source_file"] = source.toString()
         props["object_file"] = object.toString()
         props["includes"] = getIncludes().collect { "-I" + it } .join(" ")
-        props.putAll(this.preferences)
+        if (isUserFile) {
+            props["compiler.cpp.extra_flags"] = [props["compiler.cpp.extra_flags"], userCppSourcesFlags].findAll().join(" ")
+        }
         return getKey(props, "recipe.cpp.o.pattern").replace(" -c", " -x c++ -c")
     }
 
-    String getCCommand(source, object) {
+    String getCCommand(source, object, isUserFile) {
         Properties props = new Properties()
+        props.putAll(this.preferences)
         props["source_file"] = source.toString()
         props["object_file"] = object.toString()
         props["includes"] = getIncludes().collect { "-I" + it } .join(" ")
-        props.putAll(this.preferences)
+        if (isUserFile) {
+            props["compiler.c.extra_flags"] = [props["compiler.c.extra_flags"],  userCSourcesFlags].findAll().join(" ")
+        }
         return getKey(props, "recipe.c.o.pattern")
     }
 
@@ -439,7 +447,8 @@ class BuildConfiguration {
         log.lifecycle("Compiling ${file.name}")
 
         def boolean isCpp = file.getPath() =~ /.*\.cpp/ || file.getPath() =~ /.*\.ino/
-        def String compileCommand = isCpp ? getCppCommand(file, objectFile) : getCCommand(file, objectFile)
+        def boolean isUserFile = file.toString().startsWith(projectDir.toString())
+        def String compileCommand = isCpp ? getCppCommand(file, objectFile, isUserFile) : getCCommand(file, objectFile, isUserFile)
 
         log.debug(compileCommand)
         execute(compileCommand)

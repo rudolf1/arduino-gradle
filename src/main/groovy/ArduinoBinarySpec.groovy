@@ -13,4 +13,10 @@ interface ArduinoBinarySpec extends BinarySpec {
 
     void setBoard(String board)
     String getBoard()
+
+    String getUserCppSourcesFlags()
+    void setUserCppSourcesFlags(String flags)
+
+    String getUserCSourcesFlags()
+    void setUserCSourcesFlags(String flags)
 }

@@ -104,6 +104,8 @@ class ArduinoPlugin implements Plugin<Project> {
                     binary.board = board
                     binary.libraries = component.libraries
                     binary.projectName = component.name
+                    binary.userCppSourcesFlags = component.userCppSourcesFlags
+                    binary.userCSourcesFlags = component.userCSourcesFlags
                 }
             }
         }
@@ -131,7 +133,7 @@ class ArduinoPlugin implements Plugin<Project> {
             components.each { component ->
                 component.boards.each { board ->
                     def taskNameFriendlyBoardName = "-" + board.replace(":", "-")
-                    def builder = createBuildConfiguration(project, arduinoInstallation, [], component.name, null, [], board)
+                    def builder = createBuildConfiguration(project, arduinoInstallation, [], component.name, null, [], board, component.userCppSourcesFlags, component.userCSourcesFlags)
                     def uploadTaskName = "upload" + taskNameFriendlyBoardName
                     def monitorTaskName = "monitor" + taskNameFriendlyBoardName
 
@@ -168,7 +170,7 @@ class ArduinoPlugin implements Plugin<Project> {
         public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ArduinoBinarySpec binary) {
             def taskNameFriendlyBoardName = "-" + binary.board.replace(":", "-")
             def project = (Project)projectId
-            def builder = createBuildConfiguration(project, arduinoInstallation, binary.libraries, binary.projectName, guessProjectLibrariesDirectory(project), [], binary.board)
+            def builder = createBuildConfiguration(project, arduinoInstallation, binary.libraries, binary.projectName, guessProjectLibrariesDirectory(project), [], binary.board, binary.userCppSourcesFlags, binary.userCSourcesFlags)
 
             def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
             def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
@@ -239,7 +241,7 @@ class ArduinoPlugin implements Plugin<Project> {
 
         private static BuildConfiguration createBuildConfiguration(Project project, ArduinoInstallation installation, List<String> libraryNames,
                                                                    String projectName, String projectLibrariesDir, List<String> preprocessorDefines,
-                                                                   String board) {
+                                                                   String board, String userCppSourcesFlags, String userCSourcesFlags) {
             def String pathFriendlyBoardName = board.replace(":", "-")
             def File buildDir = new File(project.buildDir, pathFriendlyBoardName)
             buildDir.mkdirs();
@@ -271,6 +273,8 @@ class ArduinoPlugin implements Plugin<Project> {
             config.board = board
             config.preferences = preferences
             config.buildDir = buildDir
+            config.userCppSourcesFlags = userCppSourcesFlags
+            config.userCSourcesFlags = userCSourcesFlags
             config.buildDir.mkdirs()
 
             return config
