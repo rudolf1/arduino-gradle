@@ -1,12 +1,14 @@
-package com.github.jlewallen.arduino;
+package com.github.jlewallen.arduino
 
+import org.conservify.firmwaretool.util.DoubleQuotedArgumentsOnWindowsCommandLine;
+import org.conservify.firmwaretool.util.CommandLineParser
 import org.gradle.api.*
 import groovy.util.logging.Slf4j
 
 @Slf4j
 class RunCommand {
     static String run(String cmd, File workingDir, boolean echo = false) {
-        def split = CommandLine.translateCommandLine(cmd)
+        def split = CommandLineParser.translateCommandLine(cmd)
         def fixed = split.collect { DoubleQuotedArgumentsOnWindowsCommandLine.fixArgument(it) }
         return run(fixed as String[], workingDir, echo)
     }

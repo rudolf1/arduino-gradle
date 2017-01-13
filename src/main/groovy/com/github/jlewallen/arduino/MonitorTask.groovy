@@ -1,5 +1,6 @@
-package com.github.jlewallen.arduino;
+package com.github.jlewallen.arduino
 
+import org.conservify.firmwaretool.util.CommandLineParser;
 import org.gradle.api.*
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.incremental.*
@@ -11,8 +12,6 @@ class MonitorTask extends DefaultTask {
     void execute(IncrementalTaskInputs inputs) {
         def port = uploadTask.ports[-1]
 
-        Uploader.waitForPort(port)
-
         def logFile = new File("log.txt")
         if (logFile.isFile()) {
             logFile.delete()
@@ -20,7 +19,7 @@ class MonitorTask extends DefaultTask {
 
         def puttyPath = findPuttyPath()
         def commandLine = "${puttyPath} -serial ${port} -sercfg 115200 -sessionlog log.txt"
-        def parsed = CommandLine.translateCommandLine(commandLine)
+        def parsed = CommandLineParser.translateCommandLine(commandLine)
         println(commandLine)
 
         def processBuilder = new ProcessBuilder(parsed)

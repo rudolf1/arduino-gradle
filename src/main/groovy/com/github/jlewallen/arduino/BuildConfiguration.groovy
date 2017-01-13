@@ -1,6 +1,7 @@
 package com.github.jlewallen.arduino;
 
 import groovy.util.logging.Slf4j
+import org.conservify.firmwaretool.uploading.UploaderConfig
 import org.gradle.api.*
 import org.gradle.api.internal.file.FileOperations
 import groovy.json.JsonOutput
@@ -333,10 +334,10 @@ class BuildConfiguration {
 
     String getUploadCommand(String serial) {
         if (this.isBossac()) {
-            return getBossacUploadCommand(serial);
+            return getBossacUploadCommand(serial)
         }
         if (this.isAvrDude()) {
-            return getAvrDudeUploadCommand(serial);
+            return getAvrDudeUploadCommand(serial)
         }
         throw new GradleException("Unknown upload.tool: " + uploadTool)
     }
@@ -424,6 +425,19 @@ class BuildConfiguration {
                dir.absolutePath.contains(File.separator + ".svn") ||
                dir.absolutePath.contains(File.separator + "tests") ||
                dir.absolutePath.contains(File.separator + "test")
+    }
+
+    UploaderConfig getUploadConfig() {
+        def config = new UploaderConfig()
+        config.commandLine = this.getUploadCommandTemplate()
+        if (this.isBossac()) {
+            config.toolsPath = getKey(this.preferences, "tools.bossac.path")
+        }
+        if (this.isAvrDude()) {
+            config.toolsPath = getKey(this.preferences, "tools.avrdude.cmd.path")
+        }
+        config.use1200bpsTouch = use1200BpsTouch
+        return config
     }
 
     File makeObjectFilePath(File file) {
