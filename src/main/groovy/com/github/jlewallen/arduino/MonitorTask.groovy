@@ -1,6 +1,6 @@
 package com.github.jlewallen.arduino
 
-import org.conservify.firmwaretool.util.CommandLineParser;
+import org.conservify.firmwaretool.monitoring.SerialMonitor;
 import org.gradle.api.*
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.incremental.*
@@ -10,39 +10,14 @@ class MonitorTask extends DefaultTask {
 
     @TaskAction
     void execute(IncrementalTaskInputs inputs) {
-        def port = uploadTask.ports[-1]
+        def ports = uploadTask.ports
 
         def logFile = new File("log.txt")
         if (logFile.isFile()) {
             logFile.delete()
         }
 
-        def puttyPath = findPuttyPath()
-        def commandLine = "${puttyPath} -serial ${port} -sercfg 115200 -sessionlog log.txt"
-        def parsed = CommandLineParser.translateCommandLine(commandLine)
-        println(commandLine)
-
-        def processBuilder = new ProcessBuilder(parsed)
-        processBuilder.redirectErrorStream(true)
-        processBuilder.directory(project.projectDir)
-        def process = processBuilder.start()
-    }
-
-    def findPuttyPath() {
-        def puttyPaths = [
-            "./",
-            "C:/Windows/System32"
-        ]
-
-        def files = puttyPaths.collect { new File(it, "putty.exe") }
-        def found = files.findAll {
-            return it.isFile()
-        }
-        if (found.size() == 0) {
-            println files
-            throw new Exception("Unable to find putty.exe")
-        }
-
-        return found[0]
+        SerialMonitor monitor = new SerialMonitor()
+        monitor.open(ports, 115200, logFile)
     }
 }
