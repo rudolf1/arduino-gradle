@@ -6,7 +6,6 @@ import org.gradle.api.*
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.incremental.*
 import org.conservify.firmwaretool.uploading.Uploader
-import org.conservify.firmwaretool.uploading.PortDiscoveryInteraction
 
 @Slf4j
 class UploadTask extends DefaultTask {

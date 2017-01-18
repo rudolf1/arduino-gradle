@@ -83,6 +83,10 @@ class ArduinoPlugin implements Plugin<Project> {
         }
 
         @ComponentType
+        public static void registerArduinoLibrary(TypeBuilder<ArduinoComponentSpec> builder) {
+        }
+
+        @ComponentType
         public static void registerArduinoComponent(TypeBuilder<ArduinoComponentSpec> builder) {
         }
 
@@ -91,10 +95,24 @@ class ArduinoPlugin implements Plugin<Project> {
         }
 
         @ComponentBinaries
-        public static void generateBinaries(ModelMap<ArduinoBinarySpec> binaries, ServiceRegistry serviceRegistry,
-                                            ProjectIdentifier projectId, ArduinoComponentSpec component) {
+        public static void generateLibraryBinaries(ModelMap<ArduinoBinarySpec> binaries, ServiceRegistry serviceRegistry,
+                                                   ProjectIdentifier projectId, ArduinoLibrarySpec component) {
             component.boards.each { board ->
-                // def taskNameFriendlyBoardName = "-" + board.replace(":", "-")
+                binaries.create("exploded") { binary ->
+                    binary.board = board
+                    binary.libraries = component.libraries
+                    binary.projectName = component.name
+                    binary.userCppSourcesFlags = component.userCppSourcesFlags
+                    binary.userCSourcesFlags = component.userCSourcesFlags
+                    binary.isLibrary = true
+                }
+            }
+        }
+
+        @ComponentBinaries
+        public static void generateExecutableBinaries(ModelMap<ArduinoBinarySpec> binaries, ServiceRegistry serviceRegistry,
+                                                      ProjectIdentifier projectId, ArduinoComponentSpec component) {
+            component.boards.each { board ->
                 binaries.create("exploded") { binary ->
                     binary.board = board
                     binary.libraries = component.libraries
@@ -128,7 +146,7 @@ class ArduinoPlugin implements Plugin<Project> {
             components.each { component ->
                 component.boards.each { board ->
                     def taskNameFriendlyBoardName = "-" + board.replace(":", "-")
-                    def builder = createBuildConfiguration(project, arduinoInstallation, [], component.name, null, [], board, component.userCppSourcesFlags, component.userCSourcesFlags)
+                    def builder = createBuildConfiguration(project, arduinoInstallation, false, [], component.name, null, [], board, component.userCppSourcesFlags, component.userCSourcesFlags)
                     def uploadTaskName = "upload" + taskNameFriendlyBoardName
                     def monitorTaskName = "monitor" + taskNameFriendlyBoardName
 
@@ -165,7 +183,7 @@ class ArduinoPlugin implements Plugin<Project> {
         public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ArduinoBinarySpec binary) {
             def taskNameFriendlyBoardName = "-" + binary.board.replace(":", "-")
             def project = (Project)projectId
-            def builder = createBuildConfiguration(project, arduinoInstallation, binary.libraries, binary.projectName, guessProjectLibrariesDirectory(project), [], binary.board, binary.userCppSourcesFlags, binary.userCSourcesFlags)
+            def builder = createBuildConfiguration(project, arduinoInstallation, binary.isLibrary, binary.libraries, binary.projectName, guessProjectLibrariesDirectory(project), [], binary.board, binary.userCppSourcesFlags, binary.userCSourcesFlags)
 
             def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
             def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
@@ -190,17 +208,19 @@ class ArduinoPlugin implements Plugin<Project> {
                 task.outputs.file(task.archiveFile)
             })
 
-            tasks.create(linkTaskName, LinkTask.class, { task ->
-                task.dependsOn(archiveTaskName);
-                task.buildConfiguration = builder
-                task.objectFiles = builder.allObjectFiles
-                task.archiveFile = builder.archiveFile
-                task.binary = builder.binaryFile
+            if (!binary.isLibrary) {
+                tasks.create(linkTaskName, LinkTask.class, { task ->
+                    task.dependsOn(archiveTaskName);
+                    task.buildConfiguration = builder
+                    task.objectFiles = builder.allObjectFiles
+                    task.archiveFile = builder.archiveFile
+                    task.binary = builder.binaryFile
 
-                task.objectFiles.each { task.inputs.file(it) }
-                task.inputs.file(task.archiveFile)
-                task.outputs.file(task.binary)
-            })
+                    task.objectFiles.each { task.inputs.file(it) }
+                    task.inputs.file(task.archiveFile)
+                    task.outputs.file(task.binary)
+                })
+            }
         }
 
         private static String[] getPreferencesCommandLine(ArduinoInstallation installation, String projectLibrariesDir, String board, File buildDir) {
@@ -234,15 +254,15 @@ class ArduinoPlugin implements Plugin<Project> {
             return parts.toArray()
         }
 
-        private static BuildConfiguration createBuildConfiguration(Project project, ArduinoInstallation installation, List<String> libraryNames,
+        private static BuildConfiguration createBuildConfiguration(Project project, ArduinoInstallation installation, boolean isLibrary, List<String> libraryNames,
                                                                    String projectName, String projectLibrariesDir, List<String> preprocessorDefines,
                                                                    String board, String userCppSourcesFlags, String userCSourcesFlags) {
-            def String pathFriendlyBoardName = board.replace(":", "-")
-            def File buildDir = new File(project.buildDir, pathFriendlyBoardName)
+            String pathFriendlyBoardName = board.replace(":", "-")
+            File buildDir = new File(project.buildDir, pathFriendlyBoardName)
             buildDir.mkdirs();
 
             def preferencesCommand = getPreferencesCommandLine(installation, projectLibrariesDir, board, buildDir)
-            def String data = RunCommand.run(preferencesCommand, project.projectDir)
+            String data = RunCommand.run(preferencesCommand, project.projectDir)
 
             /*
             def friendlyName = config.pathFriendlyBoardName
@@ -258,6 +278,7 @@ class ArduinoPlugin implements Plugin<Project> {
 
             def config = new BuildConfiguration()
 
+            config.isLibrary = isLibrary
             config.libraryNames = libraryNames
             config.projectName = projectName
             config.arduinoHome = installation.home

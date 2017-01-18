@@ -23,6 +23,7 @@ class BuildConfiguration {
     String board
     boolean provideMain
     boolean wasAnythingCompiled
+    boolean isLibrary
     FileOperations fileOperations
 
     File[] getLibrariesSearchPath() {
@@ -68,6 +69,10 @@ class BuildConfiguration {
     }
 
     File[] findNonProjectFiles() {
+        if (isLibrary) {
+            return []
+        }
+
         def nonProjectFiles = []
         gatherSourceFiles(nonProjectFiles, new File(buildCorePath), true) {
             if (provideMain)
@@ -83,6 +88,9 @@ class BuildConfiguration {
     }
 
     File getArchiveFile() {
+        if (isLibrary) {
+            return new File(buildDir, projectName + ".a")
+        }
         return new File(buildDir, "core.a")
     }
 

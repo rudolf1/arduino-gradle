@@ -19,4 +19,7 @@ interface ArduinoBinarySpec extends BinarySpec {
 
     String getUserCSourcesFlags()
     void setUserCSourcesFlags(String flags)
+
+    boolean getIsLibrary()
+    void setIsLibrary(boolean library)
 }
