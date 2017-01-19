@@ -40,12 +40,14 @@ artifacts {
 uploadArchives {
     repositories {
         mavenLocal()
-        mavenDeployer {
-            repository(url: "https://conservify.page5of4.com/nexus/content/repositories/snapshots") {
-                authentication(userName: mavenUser, password: mavenPassword)
+        if (project.hasProperty("mavenUser") && project.hasProperty("mavenPassword")) {
+            mavenDeployer {
+                    repository(url: "https://conservify.page5of4.com/nexus/content/repositories/snapshots") {
+                        authentication(userName: mavenUser, password: mavenPassword)
+                    }
+                pom.version = "1.0-SNAPSHOT"
+                pom.groupId = "org.conservify"
             }
-            pom.version = "1.0-SNAPSHOT"
-            pom.groupId = "org.conservify"
         }
     }
 }
