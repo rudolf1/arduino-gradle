@@ -390,7 +390,14 @@ class BuildConfiguration {
             return getKey(props, "tools.bossac.upload.pattern")
         }
         if (this.isAvrDude()) {
-            return getKey(props, "tools.avrdude.upload.pattern")
+            Properties newProps = new Properties()
+            newProps.putAll(this.preferences)
+            newProps["path"] = getKey(newProps, "tools.avrdude.path")
+            newProps["cmd.path"] = getKey(newProps, "tools.avrdude.cmd.path")
+            newProps["config.path"] = getKey(newProps, "tools.avrdude.config.path")
+            newProps["upload.verbose"] = ""
+            newProps["upload.verify"] = "-v"
+            return getKey(newProps, "tools.avrdude.upload.pattern")
         }
         throw new GradleException("Unknown upload.tool: " + uploadTool)
     }
