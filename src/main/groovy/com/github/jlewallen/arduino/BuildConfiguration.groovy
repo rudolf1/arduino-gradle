@@ -73,6 +73,10 @@ class BuildConfiguration {
             return []
         }
 
+        return findCoreAndVariantFiles() + findLibraryFiles()
+    }
+
+    File[] findCoreAndVariantFiles() {
         def nonProjectFiles = []
         gatherSourceFiles(nonProjectFiles, new File(buildCorePath), true) {
             if (provideMain)
@@ -81,10 +85,16 @@ class BuildConfiguration {
         }
 
         gatherSourceFiles(nonProjectFiles, new File(buildVariantPath))
-        this.getLibraryPaths().each { path ->
-            gatherSourceFiles(nonProjectFiles, path)
-        }
+
         return nonProjectFiles
+    }
+
+    File[] findLibraryFiles() {
+        def libraryFiles = []
+        this.getLibraryPaths().each { path ->
+            gatherSourceFiles(libraryFiles, path)
+        }
+        return libraryFiles
     }
 
     File getArchiveFile() {
@@ -234,24 +244,24 @@ class BuildConfiguration {
         return getKey(props, "recipe.c.combine.pattern")
     }
 
-    String getCppCommand(source, object, isUserFile) {
+    String getCppCommand(source, object, isUserFile, isCoreFile, isLibraryFile) {
         Properties props = new Properties()
         props.putAll(this.preferences)
         props["source_file"] = source.toString()
         props["object_file"] = object.toString()
-        props["includes"] = getIncludes().collect { "-I" + it } .join(" ")
+        props["includes"] = getIncludes(isCoreFile, isLibraryFile).collect { "-I" + it } .join(" ")
         if (isUserFile) {
             props["compiler.cpp.extra_flags"] = [props["compiler.cpp.extra_flags"], userCppSourcesFlags].findAll().join(" ")
         }
         return getKey(props, "recipe.cpp.o.pattern").replace(" -c", " -x c++ -c")
     }
 
-    String getCCommand(source, object, isUserFile) {
+    String getCCommand(source, object, isUserFile, isCoreFile, isLibraryFile) {
         Properties props = new Properties()
         props.putAll(this.preferences)
         props["source_file"] = source.toString()
         props["object_file"] = object.toString()
-        props["includes"] = getIncludes().collect { "-I" + it } .join(" ")
+        props["includes"] = getIncludes(isCoreFile, isLibraryFile).collect { "-I" + it } .join(" ")
         if (isUserFile) {
             props["compiler.c.extra_flags"] = [props["compiler.c.extra_flags"],  userCSourcesFlags].findAll().join(" ")
         }
@@ -287,20 +297,22 @@ class BuildConfiguration {
         ]
     }
 
-    String[] getIncludes() {
-        def paths = [
-            buildCorePath,
-            buildVariantPath
-        ]
+    String[] getIncludes(isCoreFile, isLibraryFile) {
+        def paths = [ ]
 
-        this.getLibraryPaths().each { library ->
-            paths << library.absolutePath
-            library.eachDirRecurse() {
-                if (!shouldSkipDirectory(it)) {
-                    paths << it.absolutePath
+        if (!isCoreFile) {
+            this.getLibraryPaths().each { library ->
+                paths << library.absolutePath
+                library.eachDirRecurse() {
+                    if (!shouldSkipDirectory(it)) {
+                        paths << it.absolutePath
+                    }
                 }
             }
         }
+
+        paths << buildCorePath
+        paths << buildVariantPath
 
         return paths
     }
@@ -472,8 +484,10 @@ class BuildConfiguration {
         log.lifecycle("Compiling ${file.name}")
 
         def boolean isCpp = file.getPath() =~ /.*\.cpp/ || file.getPath() =~ /.*\.ino/
+        def boolean isCoreFile = findCoreAndVariantFiles().contains(file)
+        def boolean isLibraryFile = findLibraryFiles().contains(file)
         def boolean isUserFile = file.toString().startsWith(projectDir.toString())
-        def String compileCommand = isCpp ? getCppCommand(file, objectFile, isUserFile) : getCCommand(file, objectFile, isUserFile)
+        def String compileCommand = isCpp ? getCppCommand(file, objectFile, isUserFile, isCoreFile, isLibraryFile) : getCCommand(file, objectFile, isUserFile, isCoreFile, isLibraryFile)
 
         log.debug(compileCommand)
         execute(compileCommand)
