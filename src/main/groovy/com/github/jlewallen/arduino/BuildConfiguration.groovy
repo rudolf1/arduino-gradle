@@ -458,10 +458,10 @@ class BuildConfiguration {
         def config = new UploaderConfig()
         config.commandLine = this.getUploadCommandTemplate()
         if (this.isBossac()) {
-            config.toolsPath = getKey(this.preferences, "tools.bossac.path")
+            config.toolsPath = new File(getKey(this.preferences, "tools.bossac.path"))
         }
         if (this.isAvrDude()) {
-            config.toolsPath = getKey(this.preferences, "tools.avrdude.cmd.path")
+            config.toolsPath = new File(getKey(this.preferences, "tools.avrdude.cmd.path"))
         }
         config.use1200bpsTouch = use1200BpsTouch
         return config
