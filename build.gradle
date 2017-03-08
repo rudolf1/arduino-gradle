@@ -30,6 +30,9 @@ shadowJar {
         include(dependency('com.fazecast:jSerialComm:1.3.11'))
         include(dependency('org.conservify:firmware-tool-lib:1.0-SNAPSHOT'))
         include(dependency('commons-io:commons-io:2.5'))
+        include(dependency('org.eclipse.jgit:org.eclipse.jgit:4.6.0.201612231935-r'))
+        include(dependency('org.eclipse.jgit:org.eclipse.jgit.http.apache:4.6.0.201612231935-r'))
+        include(dependency('com.jcraft:jsch:0.1.53'))
     }
 }
 
@@ -60,7 +63,12 @@ dependencies {
     shadow 'org.conservify:firmware-tool-lib:1.0-SNAPSHOT'
 
     compile group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.6.0.201612231935-r'
+    shadow group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.6.0.201612231935-r'
+
     compile group: 'org.eclipse.jgit', name: 'org.eclipse.jgit.http.apache', version: '4.6.0.201612231935-r'
+    shadow group: 'org.eclipse.jgit', name: 'org.eclipse.jgit.http.apache', version: '4.6.0.201612231935-r'
+
+    shadow group: 'com.jcraft', name: 'jsch', version: '0.1.53'
 
     shadow 'commons-io:commons-io:2.5'
 }

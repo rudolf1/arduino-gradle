@@ -322,8 +322,7 @@ class BuildConfiguration {
         def libraryPaths = []
         def buildDependencies = new BuildDependencies(libraryPaths)
         this.libraryNames.each { library ->
-            log.info("Searching for $library...")
-            def String libraryDirectory = buildDependencies.locate(library)
+            def File libraryDirectory = buildDependencies.locate(library)
             if (libraryDirectory != null) {
                 libraryPaths << libraryDirectory
             }
