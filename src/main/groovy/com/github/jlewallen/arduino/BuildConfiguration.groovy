@@ -10,6 +10,7 @@ import groovy.json.JsonBuilder
 
 @Slf4j
 class BuildConfiguration {
+    BuildDependencies buildDependencies = new BuildDependencies(libraryPaths)
     Properties preferences
     String arduinoHome
     String projectName
@@ -318,19 +319,22 @@ class BuildConfiguration {
         return paths
     }
 
+    List<File> cachedLibraryPaths
+
     File[] getLibraryPaths() {
-        def libraryPaths = []
-        def buildDependencies = new BuildDependencies(libraryPaths)
-        this.libraryNames.each { library ->
-            def File libraryDirectory = buildDependencies.locate(library)
-            if (libraryDirectory != null) {
-                libraryPaths << libraryDirectory
-            }
-            else {
-                throw new GradleException("Unable to find " + library)
+        if (cachedLibraryPaths == null) {
+            cachedLibraryPaths = []
+            this.libraryNames.each { library ->
+                def File libraryDirectory = buildDependencies.locate(library)
+                if (libraryDirectory != null) {
+                    cachedLibraryPaths << libraryDirectory
+                }
+                else {
+                    throw new GradleException("Unable to find " + library)
+                }
             }
         }
-        return libraryPaths;
+        return cachedLibraryPaths;
     }
 
     private String getUploadTool() {
