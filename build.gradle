@@ -59,6 +59,8 @@ dependencies {
     compile 'org.conservify:firmware-tool-lib:1.0-SNAPSHOT'
     shadow 'org.conservify:firmware-tool-lib:1.0-SNAPSHOT'
 
+    compile group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.6.0.201612231935-r'
+    compile group: 'org.eclipse.jgit', name: 'org.eclipse.jgit.http.apache', version: '4.6.0.201612231935-r'
 
     shadow 'commons-io:commons-io:2.5'
 }

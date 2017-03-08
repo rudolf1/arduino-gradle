@@ -1,6 +1,7 @@
 package com.github.jlewallen.arduino;
 
 import groovy.util.logging.Slf4j
+import org.conservify.builds.gitdeps.BuildDependencies
 import org.conservify.firmwaretool.uploading.UploaderConfig
 import org.gradle.api.*
 import org.gradle.api.internal.file.FileOperations
@@ -319,21 +320,14 @@ class BuildConfiguration {
 
     File[] getLibraryPaths() {
         def libraryPaths = []
+        def buildDependencies = new BuildDependencies(libraryPaths)
         this.libraryNames.each { library ->
             log.info("Searching for $library...")
-            def boolean found = false
-            this.getLibrariesSearchPath().each { librariesDir ->
-                log.info("Checking $librariesDir...")
-                def libraryDirectory = new File(librariesDir, library)
-                if (libraryDirectory.exists() && libraryDirectory.isDirectory()) {
-                    libraryPaths << libraryDirectory
-                    found = true
-                    log.info("Found $libraryDirectory!")
-                    return
-                }
+            def String libraryDirectory = buildDependencies.locate(library)
+            if (libraryDirectory != null) {
+                libraryPaths << libraryDirectory
             }
-
-            if (!found) {
+            else {
                 throw new GradleException("Unable to find " + library)
             }
         }
