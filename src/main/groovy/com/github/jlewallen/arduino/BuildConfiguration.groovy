@@ -10,7 +10,7 @@ import groovy.json.JsonBuilder
 
 @Slf4j
 class BuildConfiguration {
-    BuildDependencies buildDependencies = new BuildDependencies(libraryPaths)
+    BuildDependencies buildDependencies = new BuildDependencies()
     Properties preferences
     String arduinoHome
     String projectName
@@ -325,7 +325,7 @@ class BuildConfiguration {
         if (cachedLibraryPaths == null) {
             cachedLibraryPaths = []
             this.libraryNames.each { library ->
-                def File libraryDirectory = buildDependencies.locate(library)
+                def File libraryDirectory = buildDependencies.locate(librariesSearchPath, library)
                 if (libraryDirectory != null) {
                     cachedLibraryPaths << libraryDirectory
                 }
