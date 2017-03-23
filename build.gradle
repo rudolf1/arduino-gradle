@@ -13,6 +13,7 @@ apply plugin: 'groovy'
 apply plugin: 'maven'
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven {
         url "https://conservify.page5of4.com/nexus/content/groups/public"
@@ -33,6 +34,7 @@ shadowJar {
         include(dependency('org.eclipse.jgit:org.eclipse.jgit:4.6.0.201612231935-r'))
         include(dependency('org.eclipse.jgit:org.eclipse.jgit.http.apache:4.6.0.201612231935-r'))
         include(dependency('com.jcraft:jsch:0.1.53'))
+        include(dependency('org.scream3r:jssc:2.8.0'))
     }
 }
 
@@ -43,15 +45,6 @@ artifacts {
 uploadArchives {
     repositories {
         mavenLocal()
-        if (project.hasProperty("mavenUser") && project.hasProperty("mavenPassword")) {
-            mavenDeployer {
-                    repository(url: "https://conservify.page5of4.com/nexus/content/repositories/snapshots") {
-                        authentication(userName: mavenUser, password: mavenPassword)
-                    }
-                pom.version = "1.0-SNAPSHOT"
-                pom.groupId = "org.conservify"
-            }
-        }
     }
 }
 
@@ -70,5 +63,10 @@ dependencies {
 
     shadow group: 'com.jcraft', name: 'jsch', version: '0.1.53'
 
+    compile group: 'commons-io', name: 'commons-io', version: '2.5'
+
     shadow 'commons-io:commons-io:2.5'
+
+    compile 'org.scream3r:jssc:2.8.0'
+    shadow 'org.scream3r:jssc:2.8.0'
 }
