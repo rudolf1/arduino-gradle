@@ -61,7 +61,7 @@ class BuildConfiguration {
 
     File[] findProjectFiles() {
         def projectFiles = []
-        gatherSourceFiles(projectFiles, projectDir, false)
+        gatherSourceFiles(projectFiles, projectDir, false, false)
 
         if (projectFiles.size() == 0) {
           throw new GradleException("No project files found in $projectDir")
@@ -80,13 +80,13 @@ class BuildConfiguration {
 
     File[] findCoreAndVariantFiles() {
         def nonProjectFiles = []
-        gatherSourceFiles(nonProjectFiles, new File(buildCorePath), true) {
+        gatherSourceFiles(nonProjectFiles, new File(buildCorePath), true, true) {
             if (provideMain)
                 return true
             return !(it.name =~ /main.(c|cpp)/)
         }
 
-        gatherSourceFiles(nonProjectFiles, new File(buildVariantPath))
+        gatherSourceFiles(nonProjectFiles, new File(buildVariantPath), true, true)
 
         return nonProjectFiles
     }
@@ -94,7 +94,7 @@ class BuildConfiguration {
     File[] findLibraryFiles() {
         def libraryFiles = []
         this.getLibraryPaths().each { path ->
-            gatherSourceFiles(libraryFiles, path)
+            gatherSourceFiles(libraryFiles, path, true, true)
         }
         return libraryFiles
     }
@@ -415,7 +415,7 @@ class BuildConfiguration {
         return files.findAll { it.name =~ /.*\.(ino|pde)/ }.size() > 0
     }
 
-    void gatherSourceFiles(ArrayList list, File dir, boolean recurse = true, Closure closure = { f -> true }) {
+    void gatherSourceFiles(ArrayList list, File dir, boolean recurse = true, boolean forLibrary = false, Closure closure = { f -> true }) {
         dir.eachFileMatch(~/.*\.c$/) {
             if (closure(it)) {
                 list << it
@@ -428,16 +428,18 @@ class BuildConfiguration {
             }
         }
 
-        dir.eachFileMatch(~/.*\.ino$/) {
-            if (closure(it)) {
-                list << it
+        if (!forLibrary) {
+            dir.eachFileMatch(~/.*\.ino$/) {
+                if (closure(it)) {
+                    list << it
+                }
             }
         }
 
         if (recurse) {
             dir.eachDirRecurse() {
                 if (!shouldSkipDirectory(it)) {
-                    gatherSourceFiles(list, it)
+                    gatherSourceFiles(list, it, recurse, forLibrary)
                 }
             }
         }

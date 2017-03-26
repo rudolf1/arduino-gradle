@@ -15,9 +15,6 @@ apply plugin: 'maven'
 repositories {
     mavenLocal()
     mavenCentral()
-    maven {
-        url "https://conservify.page5of4.com/nexus/content/groups/public"
-    }
 }
 
 group = 'com.github.jlewallen.arduino'
