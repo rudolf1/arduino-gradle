@@ -7,6 +7,8 @@ import org.gradle.api.*
 import org.gradle.api.internal.file.FileOperations
 import groovy.json.JsonOutput
 import groovy.json.JsonBuilder
+import java.nio.file.Path
+import java.nio.file.Paths
 
 @Slf4j
 class BuildConfiguration {
@@ -15,6 +17,7 @@ class BuildConfiguration {
     String arduinoHome
     String projectName
     String[] libraryNames
+    String[] additionalSources
     String userCppSourcesFlags
     String userCSourcesFlags
     File[] libraryPaths
@@ -62,7 +65,9 @@ class BuildConfiguration {
     File[] findProjectFiles() {
         def projectFiles = []
         gatherSourceFiles(projectFiles, projectDir, false, false)
-
+        additionalSources.each { path ->
+            gatherSourceFiles(projectFiles, new File(path), false, false)
+        }
         if (projectFiles.size() == 0) {
           throw new GradleException("No project files found in $projectDir")
         }
@@ -311,6 +316,9 @@ class BuildConfiguration {
                     }
                 }
             }
+            additionalSources.each { path ->
+                paths << path
+            }
         }
 
         paths << buildCorePath
@@ -445,12 +453,17 @@ class BuildConfiguration {
         }
     }
 
-    private boolean shouldSkipDirectory(dir) {
-        return dir.absolutePath.contains(File.separator + "examples") ||
-               dir.absolutePath.contains(File.separator + ".git") ||
-               dir.absolutePath.contains(File.separator + ".svn") ||
-               dir.absolutePath.contains(File.separator + "tests") ||
-               dir.absolutePath.contains(File.separator + "test")
+    private boolean shouldSkipDirectory(File dir) {
+        Path pathBase = projectDir.toPath()
+        Path pathDir = dir.toPath()
+        Path relative = pathBase.relativize(pathDir)
+        String path = relative.toString()
+
+        return path.contains(File.separator + "examples") ||
+               path.contains(File.separator + ".git") ||
+               path.contains(File.separator + ".svn") ||
+               path.contains(File.separator + "tests") ||
+               path.contains(File.separator + "test")
     }
 
     UploaderConfig getUploadConfig() {

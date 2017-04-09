@@ -11,6 +11,9 @@ interface ArduinoBinarySpec extends BinarySpec {
     void setLibraries(List<String> libraries)
     List<String> getLibraries()
 
+    void setAdditionalSources(List<String> sources)
+    List<String> getAdditionalSources()
+
     void setBoard(String board)
     String getBoard()
 

@@ -101,6 +101,7 @@ class ArduinoPlugin implements Plugin<Project> {
                 binaries.create("exploded") { binary ->
                     binary.board = board
                     binary.libraries = component.libraries
+                    binary.additionalSources = component.additionalSources
                     binary.projectName = component.name
                     binary.userCppSourcesFlags = component.userCppSourcesFlags
                     binary.userCSourcesFlags = component.userCSourcesFlags
@@ -116,6 +117,7 @@ class ArduinoPlugin implements Plugin<Project> {
                 binaries.create("exploded") { binary ->
                     binary.board = board
                     binary.libraries = component.libraries
+                    binary.additionalSources = component.additionalSources
                     binary.projectName = component.name
                     binary.userCppSourcesFlags = component.userCppSourcesFlags
                     binary.userCSourcesFlags = component.userCSourcesFlags
@@ -146,7 +148,7 @@ class ArduinoPlugin implements Plugin<Project> {
             components.each { component ->
                 component.boards.each { board ->
                     def taskNameFriendlyBoardName = "-" + board.replace(":", "-")
-                    def builder = createBuildConfiguration(project, arduinoInstallation, false, [], component.name, null, [], board, component.userCppSourcesFlags, component.userCSourcesFlags)
+                    def builder = createBuildConfiguration(project, arduinoInstallation, false, [], [], component.name, null, [], board, component.userCppSourcesFlags, component.userCSourcesFlags)
                     def uploadTaskName = "upload" + taskNameFriendlyBoardName
                     def monitorTaskName = "monitor" + taskNameFriendlyBoardName
 
@@ -186,7 +188,8 @@ class ArduinoPlugin implements Plugin<Project> {
         public static void createTasks(ModelMap<Task> tasks, ProjectIdentifier projectId, ArduinoInstallation arduinoInstallation, ArduinoBinarySpec binary) {
             def taskNameFriendlyBoardName = "-" + binary.board.replace(":", "-")
             def project = (Project)projectId
-            def builder = createBuildConfiguration(project, arduinoInstallation, binary.isLibrary, binary.libraries, binary.projectName, guessProjectLibrariesDirectory(project), [], binary.board, binary.userCppSourcesFlags, binary.userCSourcesFlags)
+            def builder = createBuildConfiguration(project, arduinoInstallation, binary.isLibrary, binary.libraries, binary.additionalSources, binary.projectName,
+                    guessProjectLibrariesDirectory(project), [], binary.board, binary.userCppSourcesFlags, binary.userCSourcesFlags)
 
             def compileTaskName = binary.tasks.taskName("compile", taskNameFriendlyBoardName)
             def archiveTaskName = binary.tasks.taskName("archive", taskNameFriendlyBoardName)
@@ -257,7 +260,7 @@ class ArduinoPlugin implements Plugin<Project> {
             return parts.toArray()
         }
 
-        private static BuildConfiguration createBuildConfiguration(Project project, ArduinoInstallation installation, boolean isLibrary, List<String> libraryNames,
+        private static BuildConfiguration createBuildConfiguration(Project project, ArduinoInstallation installation, boolean isLibrary, List<String> libraryNames, List<String> additionalSources,
                                                                    String projectName, String projectLibrariesDir, List<String> preprocessorDefines,
                                                                    String board, String userCppSourcesFlags, String userCSourcesFlags) {
             String pathFriendlyBoardName = board.replace(":", "-")
@@ -283,6 +286,7 @@ class ArduinoPlugin implements Plugin<Project> {
 
             config.isLibrary = isLibrary
             config.libraryNames = libraryNames
+            config.additionalSources = additionalSources
             config.projectName = projectName
             config.arduinoHome = installation.home
             config.projectDir = project.projectDir
