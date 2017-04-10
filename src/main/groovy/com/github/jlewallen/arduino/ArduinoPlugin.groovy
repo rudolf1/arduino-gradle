@@ -5,17 +5,17 @@ import org.gradle.internal.service.ServiceRegistry
 import org.gradle.platform.base.*
 import org.gradle.model.*
 import org.gradle.api.internal.project.ProjectIdentifier
-import com.fazecast.jSerialComm.*
 import groovy.util.logging.Slf4j
+import jssc.SerialPortList;
 
 @Slf4j
 class ArduinoPlugin implements Plugin<Project> {
     void apply(Project project) {
         project.task("showPorts") {
             doLast {
-                def ports = SerialPort.getCommPorts()
-                ports.each {
-                    println it.descriptivePortName
+                String[] names = SerialPortList.getPortNames();
+                names.each {
+                    println it
                 }
             }
         }
