@@ -15,6 +15,6 @@ arduino-1.6.9
 *.swp
 .clang_complete
 .idea
-project.properties
+firmwaretool.properties
 examples/git-dependency/gitdeps
 *.iml
