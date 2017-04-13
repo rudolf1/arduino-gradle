@@ -15,6 +15,9 @@ apply plugin: 'maven'
 repositories {
     mavenLocal()
     mavenCentral()
+    maven {
+        url "https://conservify.page5of4.com/nexus/content/groups/public"
+    }
 }
 
 group = 'com.github.jlewallen.arduino'
@@ -42,6 +45,15 @@ artifacts {
 uploadArchives {
     repositories {
         mavenLocal()
+        if (project.hasProperty("mavenUser") && project.hasProperty("mavenPassword")) {
+            mavenDeployer {
+                repository(url: "https://conservify.page5of4.com/nexus/content/repositories/snapshots") {
+                    authentication(userName: mavenUser, password: mavenPassword)
+                }
+                pom.version = "1.0-SNAPSHOT"
+                pom.groupId = "org.conservify"
+            }
+        }
     }
 }
 
