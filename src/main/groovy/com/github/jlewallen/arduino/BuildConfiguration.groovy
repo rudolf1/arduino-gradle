@@ -66,7 +66,7 @@ class BuildConfiguration {
         def projectFiles = []
         gatherSourceFiles(projectFiles, projectDir, false, false)
         additionalSources.each { path ->
-            gatherSourceFiles(projectFiles, new File(path), false, false)
+            gatherSourceFiles(projectFiles, fileOperations.file(path), false, false)
         }
         if (projectFiles.size() == 0) {
           throw new GradleException("No project files found in $projectDir")
